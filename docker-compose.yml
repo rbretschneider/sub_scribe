@@ -2,11 +2,20 @@
 #
 #   docker compose up -d
 #
+# Edit the ./media line below to point at your media library, then bring it up
+# and open http://localhost:8080.
+#
 # This runs sub_scribe alongside a small bgutil PO-token provider so yt-dlp can
 # fetch most YouTube content WITHOUT cookies. If you don't want the provider,
-# just run sub_scribe on its own instead:
+# drop the pot-provider service and the SUBSCRIBE_POT_PROVIDER_URL variable, or
+# run the single container on its own:
 #
-#   docker run -d -p 8080:8080 -v ./config:/config -v ./media:/media sub_scribe
+#   docker run -d -p 8080:8080 \
+#     -v subscribe_config:/config -v /path/to/media:/media \
+#     ghcr.io/rbretschneider/sub_scribe:latest
+#
+# Note the named volume for /config even there — see the comment on the volumes
+# below, it is not interchangeable with a bind mount.
 #
 # The provider is opt-in and kept in its own container, so the sub_scribe image
 # stays tiny. Cookies (Account → drag-and-drop) remain the fallback for
