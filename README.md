@@ -18,25 +18,85 @@ principles:
    the app validates it, tells you who you're signed in as and when it expires,
    and warns you *before* it lapses. No terminal, no config files, ever.
 
-## Quick start (Docker)
+## Installation
+
+Prebuilt images are published to the GitHub Container Registry for `linux/amd64`
+and `linux/arm64`, so the same command works on a normal server and on a
+Raspberry Pi.
+
+| Tag | What it tracks |
+| --- | --- |
+| `latest` | the tip of `main` |
+| `1.2.3` | an exact release |
+| `1.2` / `1` | the newest patch / minor of that line |
+
+### Option 1 — Docker Compose (recommended)
+
+Compose is the easier route because it also runs the optional PO-token provider,
+which lets most videos download **without** needing your YouTube cookies.
+
+```bash
+curl -O https://raw.githubusercontent.com/rbretschneider/sub_scribe/main/docker-compose.yml
+# edit the ./media line to point at your Plex/Jellyfin library, then:
+docker compose up -d
+```
+
+### Option 2 — a single container
 
 ```bash
 docker run -d \
   --name sub_scribe \
   -p 8080:8080 \
   -v sub_scribe_config:/config \
-  -v /path/to/media:/media \
-  ghcr.io/you/sub_scribe:latest   # or build locally: docker build -t sub_scribe .
+  -v /path/to/your/media:/media \
+  --restart unless-stopped \
+  ghcr.io/rbretschneider/sub_scribe:latest
 ```
 
-Or `docker compose up -d`, which additionally runs the optional PO-token
-provider described below.
+Mind the two volumes — they are deliberately different kinds, and
+[Storage](#storage) explains why:
+
+- **`/config`** is a *named volume*. It holds the database, your cookies, and
+  generated feeds.
+- **`/media`** is a *bind mount* to a real folder on your disk. These are the
+  video files, and this is the path you point Plex or Jellyfin at.
+
+### First run
 
 Open <http://localhost:8080>. A default "1080p, Plex layout" profile is created
-on first run, so you can add a channel right away.
+for you, so you can add a channel immediately: paste a channel or playlist URL,
+choose how far back to download, and save. The scan starts in the background and
+the **Jobs** screen shows it working.
 
-Point Plex/Jellyfin at the same `/media` folder and it will pick up the files —
-they're named in a media-server-friendly layout by default.
+Files are named the way media servers expect, for example:
+
+```
+Computerphile/Season 2026/Computerphile - 2026-07-16 - GPS Hidden Messages [2Q6OvYjOJi0].mkv
+Computerphile/Season 2026/Computerphile - 2026-07-16 - GPS Hidden Messages [2Q6OvYjOJi0].jpg
+Computerphile/Season 2026/Computerphile - 2026-07-16 - GPS Hidden Messages [2Q6OvYjOJi0].nfo
+```
+
+Point Plex or Jellyfin at that same media folder — as a **TV Shows** library,
+with the local-media-assets agent enabled — and each channel appears as a show,
+each year as a season, with artwork and metadata already in place.
+
+### Upgrading
+
+```bash
+docker compose pull && docker compose up -d      # compose
+docker pull ghcr.io/rbretschneider/sub_scribe:latest   # single container
+```
+
+Schema migrations run automatically at startup, and anything already on disk is
+re-adopted, so upgrading never loses your archive.
+
+### Building it yourself
+
+```bash
+git clone https://github.com/rbretschneider/sub_scribe.git
+cd sub_scribe
+docker build -t sub_scribe .
+```
 
 ## Storage
 

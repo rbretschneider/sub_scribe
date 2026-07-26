@@ -1,0 +1,53 @@
+name: CI
+
+# Every push and pull request is vetted and tested. The scale tests seed tens of
+# thousands of rows, so they are skipped here with -short and left for local runs.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Vet and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l ./cmd ./internal)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -short -race ./...
+
+  build:
+    name: Build image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build only — publishing happens in release.yml, so a pull request can
+      # prove the image still builds without pushing anything.
+      - name: Build the container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false

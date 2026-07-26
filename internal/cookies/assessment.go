@@ -45,11 +45,11 @@ var authCookieNames = map[string]struct{}{
 // Assessment is the metadata-only verdict returned for a cookie file. It
 // deliberately omits cookie values so it is safe to render, log, and store.
 type Assessment struct {
-	Health       Health
-	IsLogin      bool
-	CookieCount  int
-	ExpiresAt    *time.Time // earliest expiry among login cookies, if any
-	DaysUntilExpiry int      // whole days from now until ExpiresAt; 0 if expired/none
+	Health          Health
+	IsLogin         bool
+	CookieCount     int
+	ExpiresAt       *time.Time // earliest expiry among login cookies, if any
+	DaysUntilExpiry int        // whole days from now until ExpiresAt; 0 if expired/none
 }
 
 // Assess evaluates the jar as of now and produces a UI-ready verdict. The clock

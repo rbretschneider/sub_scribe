@@ -15,10 +15,10 @@ type Media struct {
 
 	Metadata MediaMetadata
 
-	Status   MediaStatus
-	FilePath string // absolute path once downloaded; empty otherwise
-	FileSize int64
-	Attempts int
+	Status    MediaStatus
+	FilePath  string // absolute path once downloaded; empty otherwise
+	FileSize  int64
+	Attempts  int
 	LastError string
 
 	DownloadedAt *time.Time
@@ -30,12 +30,12 @@ type Media struct {
 // a value object: pure data used by naming, filtering, and metadata-file
 // generation, with no identity of its own.
 type MediaMetadata struct {
-	Title       string
-	Description string
-	Uploader    string
-	UploadDate  time.Time
-	Duration    time.Duration
-	IsShort     bool
+	Title        string
+	Description  string
+	Uploader     string
+	UploadDate   time.Time
+	Duration     time.Duration
+	IsShort      bool
 	IsLivestream bool
 }
 

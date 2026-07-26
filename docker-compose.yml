@@ -14,9 +14,10 @@
 
 services:
   sub_scribe:
-    build: .
-    # Or use a published image instead of building:
-    # image: ghcr.io/you/sub_scribe:latest
+    image: ghcr.io/rbretschneider/sub_scribe:latest
+    # To run your own build of the source instead, comment out `image` above and
+    # uncomment this:
+    # build: .
     ports:
       - "8080:8080"
     volumes:

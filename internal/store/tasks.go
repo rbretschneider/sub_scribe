@@ -132,8 +132,8 @@ type rowScanner interface {
 // into times and optional ids.
 func scanTask(row rowScanner) (jobs.Task, error) {
 	var (
-		task                        jobs.Task
-		sourceID, mediaID           sql.NullInt64
+		task                         jobs.Task
+		sourceID, mediaID            sql.NullInt64
 		runAfter, createdAt, updated int64
 	)
 	if err := row.Scan(

@@ -32,8 +32,8 @@ type Source struct {
 	// must match to be downloaded.
 	TitleFilterPattern string
 
-	ShortsRule       InclusionRule
-	LivestreamsRule  InclusionRule
+	ShortsRule      InclusionRule
+	LivestreamsRule InclusionRule
 
 	// RetentionAfter, when non-zero, deletes downloaded media older than this age.
 	RetentionAfter time.Duration

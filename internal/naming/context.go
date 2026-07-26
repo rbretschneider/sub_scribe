@@ -21,7 +21,7 @@ const (
 	VarID         Variable = "id"
 	VarUploadDate Variable = "upload_date"
 	VarUploadYear Variable = "upload_year"
-	VarSeason     Variable = "season" // upload year, formatted as Plex season "SYYYY"
+	VarSeason     Variable = "season"  // upload year, formatted as Plex season "SYYYY"
 	VarEpisode    Variable = "episode" // upload date, formatted as "YYYYMMDD"
 )
 
