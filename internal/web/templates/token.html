@@ -1,0 +1,53 @@
+{{define "title"}}Connect your YouTube account{{end}}
+{{define "content"}}
+<h1>Connect your YouTube account</h1>
+<p class="lead">Give sub_scribe your YouTube login so it can download private, members-only, and age-restricted videos — no password required.</p>
+
+<section class="status-panel badge-{{.Token.BadgeClass}}" aria-label="Current status">
+  <span class="badge-icon" aria-hidden="true">{{.Token.Icon}}</span>
+  <div>
+    <p class="status-panel-text">{{.Token.StatusText}}</p>
+    {{if .Token.Connected}}
+      {{if gt .Token.DaysUntilExpiry 0}}
+        <p class="status-panel-hint">Re-upload a fresh export before it expires to avoid interruptions.</p>
+      {{end}}
+    {{end}}
+  </div>
+</section>
+
+{{if .Token.Error}}
+<div class="alert alert-error" role="alert">
+  <span class="badge-icon" aria-hidden="true">✕</span>
+  <p>{{.Token.Error}}</p>
+</div>
+{{end}}
+
+<section class="how-to">
+  <h2>How to export your cookies</h2>
+  <ol class="steps">
+    <li>Install a cookies.txt browser extension (for example "Get cookies.txt LOCALLY" for Chrome or Firefox).</li>
+    <li>Open <a href="https://www.youtube.com" rel="noreferrer">youtube.com</a> and make sure you are signed in.</li>
+    <li>Click the extension and export the cookies as a <code>cookies.txt</code> file.</li>
+    <li>Drag that file into the box below — or click to browse.</li>
+  </ol>
+</section>
+
+<form id="token-form" class="form" method="post" action="/settings/token" enctype="multipart/form-data">
+  <div id="dropzone" class="dropzone">
+    <label for="cookies" class="dropzone-label">
+      <span class="dropzone-icon" aria-hidden="true">⬆</span>
+      <span class="dropzone-title">Drag your cookies.txt here</span>
+      <span class="dropzone-sub">or click to choose a file</span>
+    </label>
+    <input id="cookies" name="cookies" type="file" accept=".txt,text/plain" required
+           aria-describedby="dropzone-filename">
+    <p id="dropzone-filename" class="dropzone-filename" aria-live="polite"></p>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">Upload cookies</button>
+  </div>
+</form>
+
+<p class="privacy-note">Your cookies never leave this server. They are stored with owner-only permissions and used only to talk to YouTube on your behalf.</p>
+{{end}}

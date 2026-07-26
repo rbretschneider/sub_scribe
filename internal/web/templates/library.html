@@ -1,0 +1,63 @@
+{{define "title"}}Library{{end}}
+{{define "content"}}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Library</div>
+    <h1>{{.Total}} video{{if ne .Total 1}}s{{end}} tracked</h1>
+    <p>Everything sub_scribe knows about across your sources —
+      {{index .Counts "downloaded"}} downloaded so far.</p>
+  </div>
+</div>
+
+<div class="filters">
+  <a class="chip" href="/library"{{if eq .Filter ""}} aria-current="true"{{end}}>All</a>
+  <a class="chip" href="/library?status=downloaded"{{if eq .Filter "downloaded"}} aria-current="true"{{end}}>Downloaded · {{index .Counts "downloaded"}}</a>
+  <a class="chip" href="/library?status=downloading"{{if eq .Filter "downloading"}} aria-current="true"{{end}}>Downloading · {{index .Counts "downloading"}}</a>
+  <a class="chip" href="/library?status=queued"{{if eq .Filter "queued"}} aria-current="true"{{end}}>Queued · {{index .Counts "queued"}}</a>
+  <a class="chip" href="/library?status=failed"{{if eq .Filter "failed"}} aria-current="true"{{end}}>Failed · {{index .Counts "failed"}}</a>
+  <a class="chip" href="/library?status=unavailable"{{if eq .Filter "unavailable"}} aria-current="true"{{end}}>Unavailable · {{index .Counts "unavailable"}}</a>
+  <a class="chip" href="/library?status=skipped"{{if eq .Filter "skipped"}} aria-current="true"{{end}}>Skipped · {{index .Counts "skipped"}}</a>
+</div>
+
+{{if and (eq .Filter "skipped") .Items}}
+<div class="alert alert-info">
+  <p>These were found but deliberately not downloaded — they fall outside the
+    source's "published within" window, or a Shorts/livestream/title rule excluded
+    them. Widen the window on the source to pull them in.</p>
+</div>
+{{end}}
+
+{{if .Items}}
+<div class="lib">
+  {{range .Items}}
+  <article class="card">
+    <a class="card-link" href="/library/{{.Media.ID}}">
+      <div class="card-thumb" style="--tp:{{thumb .Media.ExternalID}}">
+        {{if .Media.FilePath}}
+        <!-- The gradient stays behind as the fallback: onerror hides a thumbnail
+             that was never written, rather than showing a broken image. -->
+        <img class="card-img" src="/library/{{.Media.ID}}/thumb" alt="" loading="lazy"
+             onerror="this.remove()">
+        {{end}}
+        {{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}
+      </div>
+      <div class="card-body">
+        <div class="card-title">{{.Media.Metadata.Title}}</div>
+        <div class="card-meta">
+          <span class="card-chan">{{.SourceName}}</span>
+          <span class="status {{statusClass .Media.Status}}"><span class="d"></span>{{statusLabel .Media.Status}}</span>
+        </div>
+        {{if .Media.LastError}}<div class="card-error">{{.Media.LastError}}</div>{{end}}
+      </div>
+    </a>
+  </article>
+  {{end}}
+</div>
+{{else}}
+<div class="empty-state">
+  <h2>Nothing here yet</h2>
+  <p>{{if eq .Filter ""}}Add a source and sub_scribe will start filling this up.{{else}}No videos with this status right now.{{end}}</p>
+  {{if eq .Filter ""}}<a class="btn btn-primary" href="/sources/new">Add a source</a>{{else}}<a class="btn btn-secondary" href="/library">Show all</a>{{end}}
+</div>
+{{end}}
+{{end}}

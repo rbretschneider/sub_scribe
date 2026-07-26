@@ -1,0 +1,124 @@
+{{define "title"}}{{.Heading}}{{end}}
+{{define "content"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/">Dashboard</a> <span aria-hidden="true">/</span> <span aria-current="page">{{.Heading}}</span>
+</nav>
+
+<h1>{{.Heading}}</h1>
+
+{{if .Error}}
+<div class="alert alert-error" role="alert">
+  <span class="badge-icon" aria-hidden="true">✕</span>
+  <p>{{.Error}}</p>
+</div>
+{{end}}
+
+<form class="form" method="post" action="{{.Action}}">
+  <div class="field">
+    <label for="url">Channel or playlist link</label>
+    <input id="url" name="url" type="url" required autocomplete="off"
+           value="{{.Values.URL}}" placeholder="https://www.youtube.com/@example">
+    <p class="field-hint">Open the channel or playlist on YouTube and copy the link from your browser's address bar.</p>
+  </div>
+
+  <div class="field">
+    <label for="collection_type">What are you adding?</label>
+    <select id="collection_type" name="collection_type">
+      <option value="channel" {{selected .Values.CollectionType "channel"}}>A whole channel — everything this creator posts</option>
+      <option value="playlist" {{selected .Values.CollectionType "playlist"}}>A single playlist — one hand-picked list of videos</option>
+    </select>
+    <p class="field-hint"><b>Channel:</b> one creator's whole catalog — the link looks like <code>youtube.com/@name</code>. Pick this to keep everything they post.<br>
+      <b>Playlist:</b> a specific list someone assembled — the link contains <code>list=</code>. Pick this to grab just that list.</p>
+  </div>
+
+  <div class="field">
+    <label for="name">Name <span class="optional">(optional)</span></label>
+    <input id="name" name="name" type="text" autocomplete="off"
+           value="{{.Values.Name}}" placeholder="Leave blank to use the channel's own name">
+    <p class="field-hint">Only set this if you want a custom label. Left blank, we'll name it after the channel once we've had a look.</p>
+  </div>
+
+  <div class="field">
+    <label for="media_profile_id">Media profile</label>
+    <select id="media_profile_id" name="media_profile_id">
+      <option value="">— choose a profile —</option>
+      {{range .Profiles}}
+      <option value="{{.ID}}" {{selected $.Values.MediaProfileID (printf "%d" .ID)}}>{{.Name}}</option>
+      {{end}}
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="frequency_hours">Check for new videos every</label>
+    <select id="frequency_hours" name="frequency_hours">
+      <option value="6" {{selected .Values.FrequencyHours "6"}}>6 hours</option>
+      <option value="12" {{selected .Values.FrequencyHours "12"}}>12 hours</option>
+      <option value="24" {{selected .Values.FrequencyHours "24"}}>Daily</option>
+      <option value="168" {{selected .Values.FrequencyHours "168"}}>Weekly</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="cookie_behavior">YouTube cookies</label>
+    <select id="cookie_behavior" name="cookie_behavior">
+      <option value="when_needed" {{selected .Values.CookieBehavior "when_needed"}}>Only when needed (recommended)</option>
+      <option value="disabled" {{selected .Values.CookieBehavior "disabled"}}>Never</option>
+      <option value="all_operations" {{selected .Values.CookieBehavior "all_operations"}}>Always</option>
+    </select>
+    <p class="field-hint">Cookies unlock private and age-restricted videos but carry a small ban risk.</p>
+  </div>
+
+  <div class="field">
+    <label for="shorts_rule">Shorts</label>
+    <select id="shorts_rule" name="shorts_rule">
+      <option value="exclude" {{selected .Values.ShortsRule "exclude"}}>Skip Shorts</option>
+      <option value="include" {{selected .Values.ShortsRule "include"}}>Include Shorts</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="livestreams_rule">Livestreams</label>
+    <select id="livestreams_rule" name="livestreams_rule">
+      <option value="exclude" {{selected .Values.LivestreamsRule "exclude"}}>Skip livestreams</option>
+      <option value="include" {{selected .Values.LivestreamsRule "include"}}>Include livestreams</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="cutoff_window">Only download videos published within</label>
+    <select id="cutoff_window" name="cutoff_window" data-cutoff-select>
+      <option value="" {{selected .Values.CutoffWindow ""}}>All time — grab the whole back catalog</option>
+      <option value="7" {{selected .Values.CutoffWindow "7"}}>The last 7 days</option>
+      <option value="30" {{selected .Values.CutoffWindow "30"}}>The last 30 days</option>
+      <option value="90" {{selected .Values.CutoffWindow "90"}}>The last 3 months</option>
+      <option value="180" {{selected .Values.CutoffWindow "180"}}>The last 6 months</option>
+      <option value="365" {{selected .Values.CutoffWindow "365"}}>The last year</option>
+      <option value="730" {{selected .Values.CutoffWindow "730"}}>The last 2 years</option>
+      <option value="custom" {{selected .Values.CutoffWindow "custom"}}>Since a specific date…</option>
+    </select>
+    <p class="field-hint">A rolling window — "the last year" always means the trailing 12 months, so newer uploads keep coming and older ones stay skipped.</p>
+  </div>
+
+  <div class="field" data-cutoff-date{{if ne .Values.CutoffWindow "custom"}} hidden{{end}}>
+    <label for="download_cutoff">Published on or after</label>
+    <input id="download_cutoff" name="download_cutoff" type="date" value="{{.Values.DownloadCutoff}}">
+  </div>
+
+  <div class="field">
+    <label for="title_filter">Title filter <span class="optional">(optional regular expression)</span></label>
+    <input id="title_filter" name="title_filter" type="text" autocomplete="off"
+           value="{{.Values.TitleFilter}}" placeholder="e.g. Episode \d+">
+  </div>
+
+  <div class="field">
+    <label for="retention_days">Delete downloads older than <span class="optional">(optional, days)</span></label>
+    <input id="retention_days" name="retention_days" type="number" min="0" inputmode="numeric"
+           value="{{.Values.RetentionDays}}" placeholder="0 = keep forever">
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{.SubmitLabel}}</button>
+    <a class="btn btn-secondary" href="/">Cancel</a>
+  </div>
+</form>
+{{end}}

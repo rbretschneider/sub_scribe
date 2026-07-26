@@ -1,0 +1,42 @@
+{{define "title"}}Profiles{{end}}
+{{define "content"}}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Manage</div>
+    <h1>Media profiles</h1>
+    <p>How and where a source's videos are saved — format, folder layout, metadata, SponsorBlock.</p>
+  </div>
+  <a class="btn btn-primary" href="/profiles/new">New profile</a>
+</div>
+
+{{if .Profiles}}
+<ul class="card-list">
+  {{range .Profiles}}
+  <li class="card-row">
+    <div>
+      <h2>{{.Name}}</h2>
+      <div class="card-metarow">
+        <span class="tag">{{titleCase (printf "%s" .Kind)}}</span>
+        <span class="tag">{{titleCase (printf "%s" .MetadataFormat)}}</span>
+        {{if ne (printf "%s" .SponsorBlockMode) "off"}}<span class="tag">SponsorBlock {{titleCase (printf "%s" .SponsorBlockMode)}}</span>{{end}}
+      </div>
+      <p class="card-tmpl"><code>{{.OutputPathTemplate}}</code></p>
+    </div>
+    <div class="card-actions">
+      <a class="btn btn-secondary" href="/profiles/{{.ID}}/edit">Edit</a>
+      <form method="post" action="/profiles/{{.ID}}/delete"
+            onsubmit="return confirm('Delete this profile? Sources using it will need a new one.');">
+        <button class="btn btn-danger" type="submit">Delete</button>
+      </form>
+    </div>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<section class="empty-state">
+  <h2>No profiles yet</h2>
+  <p>Create a profile to start saving videos your way.</p>
+  <a class="btn btn-primary" href="/profiles/new">New profile</a>
+</section>
+{{end}}
+{{end}}

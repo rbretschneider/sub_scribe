@@ -1,0 +1,13 @@
+.git
+.gitignore
+*_test.go
+/tmp
+/dist
+/subscribe
+/subscribe.exe
+*.db
+*.db-wal
+*.db-shm
+Dockerfile
+.dockerignore
+README.md

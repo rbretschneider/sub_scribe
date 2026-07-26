@@ -1,0 +1,95 @@
+{{define "title"}}Dashboard{{end}}
+{{define "content"}}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Overview</div>
+    <h1>Your archive</h1>
+    <p>{{.Sources}} source{{if ne .Sources 1}}s{{end}} tracked · syncing in the background</p>
+  </div>
+</div>
+
+<section class="stats">
+  <a class="stat" href="/library?status=downloaded">
+    <div class="stat-label">Videos archived</div>
+    <div class="stat-num">{{.Archived}}</div>
+    <div class="stat-sub"><b>{{.Storage}}</b> on disk</div>
+  </a>
+  <a class="stat" href="/jobs">
+    <div class="stat-label">Downloading now</div>
+    <div class="stat-num">{{.Downloading}}</div>
+    <div class="stat-sub"><b>{{.Queued}}</b> queued behind</div>
+  </a>
+  <a class="stat" href="/sources">
+    <div class="stat-label">Sources</div>
+    <div class="stat-num">{{.Sources}}</div>
+    <div class="stat-sub">channels &amp; playlists</div>
+  </a>
+  <a class="stat" href="/library?status=failed">
+    <div class="stat-label">Failed</div>
+    <div class="stat-num">{{.Failed}}</div>
+    <div class="stat-sub">{{if .Failed}}needs a look{{else}}all clear{{end}}</div>
+  </a>
+</section>
+
+<div class="grid-2">
+  <div class="stack">
+    <div>
+      <div class="section-head">
+        <h2>Downloading</h2><span class="count">{{len .NowDownloading}} active</span>
+        {{if .NowDownloading}}<span class="rec"><span class="rec-dot"></span>Live</span>{{end}}
+      </div>
+      <div class="panel panel-scroll">
+        {{range .NowDownloading}}
+        <div class="dl" data-source="{{.Media.SourceID}}">
+          <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
+          <div>
+            <div class="dl-title">{{.Media.Metadata.Title}}</div>
+            <div class="dl-meta">{{.SourceName}}</div>
+            <div class="dl-prog indet"><i data-progress="{{.Media.SourceID}}"></i></div>
+          </div>
+          <span class="status downloading"><span class="d"></span>Downloading</span>
+        </div>
+        {{else}}
+        <div class="empty-line">Nothing downloading right now.</div>
+        {{end}}
+      </div>
+    </div>
+
+    {{if .UpNext}}
+    <div>
+      <div class="section-head"><h2>Up next</h2><span class="count">{{.Queued}} queued</span></div>
+      <div class="panel panel-scroll">
+        {{range .UpNext}}
+        <div class="dl">
+          <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
+          <div>
+            <div class="dl-title">{{.Media.Metadata.Title}}</div>
+            <div class="dl-meta">{{.SourceName}}</div>
+          </div>
+          <span class="status queued"><span class="d"></span>Queued</span>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+
+  <div>
+    <div class="section-head"><h2>Recently archived</h2></div>
+    <div class="panel panel-scroll">
+      {{range .Recent}}
+      <div class="dl">
+        <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
+        <div>
+          <div class="dl-title">{{.Media.Metadata.Title}}</div>
+          <div class="dl-meta">{{.SourceName}} · {{bytes .Media.FileSize}}</div>
+        </div>
+        <span class="status done"><span class="d"></span>Done</span>
+      </div>
+      {{else}}
+      <div class="empty-line">Nothing archived yet — <a href="/sources/new">add a source</a> to begin.</div>
+      {{end}}
+    </div>
+  </div>
+</div>
+{{end}}

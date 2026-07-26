@@ -1,0 +1,80 @@
+{{define "title"}}Job #{{.Job.Task.ID}}{{end}}
+{{define "content"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/jobs">Jobs</a>
+  <span aria-hidden="true">/</span>
+  <span aria-current="page">#{{.Job.Task.ID}}</span>
+</nav>
+
+<div data-live="3000">
+
+<div class="page-head">
+  <div>
+    <div class="eyebrow">{{jobTypeLabel .Job.Task.Type}}</div>
+    <h1>{{if .Job.MediaTitle}}{{.Job.MediaTitle}}{{else if .Job.SourceName}}{{.Job.SourceName}}{{else}}Job #{{.Job.Task.ID}}{{end}}</h1>
+    <p><span class="status {{jobStatusClass .Job.Task.Status}}"><span class="d"></span>{{jobStatusLabel .Job.Task.Status}}</span></p>
+  </div>
+  <div class="head-actions">
+    {{if .CanRetry}}
+    <form method="post" action="/jobs/{{.Job.Task.ID}}/retry">
+      <button class="btn btn-primary" type="submit">Run again</button>
+    </form>
+    {{end}}
+    {{if .WatchURL}}<a class="btn btn-secondary" href="{{.WatchURL}}" rel="noopener noreferrer" target="_blank">Open on YouTube</a>{{end}}
+    {{if .CanDelete}}
+    <form method="post" action="/jobs/{{.Job.Task.ID}}/delete"
+          onsubmit="return confirm('Delete this job from the queue history?');">
+      <button class="btn btn-danger" type="submit">Delete</button>
+    </form>
+    {{end}}
+  </div>
+</div>
+
+<div class="panel">
+  <h2 class="panel-title">Details</h2>
+  <dl class="detail-grid">
+    <dt>Type</dt><dd>{{jobTypeLabel .Job.Task.Type}}</dd>
+    <dt>Status</dt><dd><span class="status {{jobStatusClass .Job.Task.Status}}"><span class="d"></span>{{jobStatusLabel .Job.Task.Status}}</span></dd>
+    {{if .Job.SourceID}}
+    <dt>Source</dt><dd><a href="/sources/{{.Job.SourceID}}">{{if .Job.SourceName}}{{.Job.SourceName}}{{else}}Source {{.Job.SourceID}}{{end}}</a></dd>
+    {{end}}
+    {{if .Job.MediaID}}
+    <dt>Video</dt><dd><a href="/library/{{.Job.MediaID}}">{{if .Job.MediaTitle}}{{.Job.MediaTitle}}{{else}}Video {{.Job.MediaID}}{{end}}</a></dd>
+    {{end}}
+    {{if .Job.MediaExternalID}}
+    <dt>Video ID</dt><dd><code>{{.Job.MediaExternalID}}</code></dd>
+    {{end}}
+    <dt>Attempts</dt><dd>{{.Job.Task.Attempts}} of {{.Job.Task.MaxAttempts}}</dd>
+    <dt>Priority</dt><dd>{{.Job.Task.Priority}}</dd>
+    <dt>Created</dt><dd>{{formatDateTime .Job.Task.CreatedAt}}</dd>
+    <dt>Scheduled for</dt><dd>{{formatDateTime .Job.Task.RunAfter}}</dd>
+    <dt>Last updated</dt><dd>{{formatDateTime .Job.Task.UpdatedAt}}</dd>
+  </dl>
+</div>
+
+{{if .Job.Task.LastError}}
+<div class="panel panel-danger">
+  <h2 class="panel-title">Why it failed</h2>
+  <pre class="error-text">{{.Job.Task.LastError}}</pre>
+</div>
+{{end}}
+
+<div class="panel">
+  <h2 class="panel-title">Log output</h2>
+  {{if .Logs}}
+  <div class="logs logs-job">
+    {{range .Logs}}
+    <div class="logline lvl-{{lower .Level}}">
+      <span class="log-time">{{logTime .Time}}</span>
+      <span class="log-level">{{.Level}}</span>
+      <span class="log-msg">{{.Message}}</span>
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="muted">No log lines were captured for this job. Logs are kept in memory, so
+    lines from before the last restart are not available.</p>
+  {{end}}
+</div>
+</div>
+{{end}}

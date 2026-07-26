@@ -1,0 +1,55 @@
+# sub_scribe with an optional PO-token provider.
+#
+#   docker compose up -d
+#
+# This runs sub_scribe alongside a small bgutil PO-token provider so yt-dlp can
+# fetch most YouTube content WITHOUT cookies. If you don't want the provider,
+# just run sub_scribe on its own instead:
+#
+#   docker run -d -p 8080:8080 -v ./config:/config -v ./media:/media sub_scribe
+#
+# The provider is opt-in and kept in its own container, so the sub_scribe image
+# stays tiny. Cookies (Account → drag-and-drop) remain the fallback for
+# age-restricted and private videos either way.
+
+services:
+  sub_scribe:
+    build: .
+    # Or use a published image instead of building:
+    # image: ghcr.io/you/sub_scribe:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      # The database MUST live on a real volume, not a host bind mount. Docker
+      # Desktop shares host folders over 9p/virtiofs, which do not honour fsync
+      # ordering: SQLite commits a batch of rows, the container stops abruptly,
+      # and some of those rows are simply gone — leaving tasks pointing at media
+      # that no longer exists. A named volume is a normal ext4 filesystem inside
+      # the VM and has none of that behaviour.
+      - subscribe_config:/config
+      # Media is a bind mount on purpose: these are the files you want on your
+      # own disk, where Plex can see them. Change the left-hand side to your
+      # Plex ingestion path. Partial downloads are written to a container-local
+      # scratch directory and only the finished file is moved here, so the
+      # mount's poor rename behaviour never breaks a download.
+      - ./media:/media
+    environment:
+      # Point yt-dlp at the provider container on the internal compose network.
+      SUBSCRIBE_POT_PROVIDER_URL: "http://pot-provider:4416"
+    depends_on:
+      - pot-provider
+    restart: unless-stopped
+
+  pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    # No host ports are published: only sub_scribe reaches it, over the private
+    # compose network, so the provider is never exposed outside Docker.
+    expose:
+      - "4416"
+    restart: unless-stopped
+
+volumes:
+  # Holds the SQLite database, cookies, and generated feeds. Back it up with
+  #   docker run --rm -v subscribe_config:/c -v "$PWD:/out" alpine \
+  #     tar czf /out/sub_scribe-config.tgz -C /c .
+  subscribe_config:

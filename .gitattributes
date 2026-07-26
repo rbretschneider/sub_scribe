@@ -1,0 +1,10 @@
+# Normalise to LF in the repository regardless of the checkout platform. The
+# build runs in a Linux container, and Go tooling and shell scripts expect LF.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.ico binary
+*.mkv binary
+*.mp4 binary

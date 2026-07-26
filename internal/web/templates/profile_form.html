@@ -1,0 +1,119 @@
+{{define "title"}}{{.Heading}}{{end}}
+{{define "content"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/">Dashboard</a> <span aria-hidden="true">/</span>
+  <a href="/profiles">Profiles</a> <span aria-hidden="true">/</span>
+  <span aria-current="page">{{.Heading}}</span>
+</nav>
+
+<h1>{{.Heading}}</h1>
+
+{{if .Error}}
+<div class="alert alert-error" role="alert">
+  <span class="badge-icon" aria-hidden="true">✕</span>
+  <p>{{.Error}}</p>
+</div>
+{{end}}
+
+<form class="form" method="post" action="{{.Action}}">
+  <div class="field">
+    <label for="name">Profile name</label>
+    <input id="name" name="name" type="text" required autocomplete="off"
+           value="{{.Values.Name}}" placeholder="e.g. 1080p Plex TV">
+  </div>
+
+  <div class="field">
+    <label for="output_path_template">Output path template</label>
+    <input id="output_path_template" name="output_path_template" type="text" required autocomplete="off"
+           value="{{.Values.OutputPathTemplate}}">
+    <p class="field-hint">Variables: <code>{{"{{ source_name }}"}}</code>, <code>{{"{{ title }}"}}</code>,
+      <code>{{"{{ upload_date }}"}}</code>, <code>{{"{{ upload_year }}"}}</code>,
+      <code>{{"{{ id }}"}}</code>, <code>{{"{{ uploader }}"}}</code>,
+      <code>{{"{{ season }}"}}</code>, <code>{{"{{ episode }}"}}</code>. Use <code>/</code> for folders.</p>
+  </div>
+
+  <div class="field">
+    <label for="kind">Downloads</label>
+    <select id="kind" name="kind">
+      <option value="video" {{selected .Values.Kind "video"}}>Video</option>
+      <option value="audio" {{selected .Values.Kind "audio"}}>Audio only</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="metadata_format">Metadata layout</label>
+    <select id="metadata_format" name="metadata_format">
+      <option value="plex" {{selected .Values.MetadataFormat "plex"}}>Plex (movie .nfo)</option>
+      <option value="jellyfin" {{selected .Values.MetadataFormat "jellyfin"}}>Jellyfin / Kodi / Emby (episode .nfo)</option>
+    </select>
+    <p class="field-hint">Which media server reads the sidecar <code>.nfo</code> files. Plex treats each video as a movie; Jellyfin/Kodi read TV-style episode metadata natively.</p>
+  </div>
+
+  <div class="field">
+    <label for="quality_format">Quality / format <span class="optional">(yt-dlp format selector)</span></label>
+    <input id="quality_format" name="quality_format" type="text" autocomplete="off"
+           value="{{.Values.QualityFormat}}" placeholder="bestvideo[height<=1080]+bestaudio/best">
+  </div>
+
+  <fieldset class="field-group">
+    <legend>Embed into the file</legend>
+    <label class="checkbox"><input type="checkbox" name="embed_metadata" {{if .Values.EmbedMetadata}}checked{{end}}> Metadata</label>
+    <label class="checkbox"><input type="checkbox" name="embed_thumbnail" {{if .Values.EmbedThumbnail}}checked{{end}}> Thumbnail</label>
+    <label class="checkbox"><input type="checkbox" name="embed_subtitles" {{if .Values.EmbedSubtitles}}checked{{end}}> Subtitles</label>
+  </fieldset>
+
+  <fieldset class="field-group">
+    <legend>Save alongside the file</legend>
+    <label class="checkbox"><input type="checkbox" name="write_thumbnail" {{if .Values.WriteThumbnail}}checked{{end}}> Thumbnail image</label>
+    <p class="field-hint">Writes a <code>.jpg</code> next to each video sharing its
+      name — the layout Plex and Jellyfin read as episode artwork. It is also what
+      the Library screen shows instead of a placeholder.</p>
+  </fieldset>
+
+  <div class="field">
+    <label for="subtitle_languages">Subtitle languages <span class="optional">(optional, comma-separated)</span></label>
+    <input id="subtitle_languages" name="subtitle_languages" type="text" autocomplete="off"
+           value="{{.Values.SubtitleLanguages}}" placeholder="en, es">
+  </div>
+
+  <div class="field">
+    <label for="sponsorblock_mode">SponsorBlock</label>
+    <select id="sponsorblock_mode" name="sponsorblock_mode">
+      <option value="off" {{selected .Values.SponsorBlockMode "off"}}>Off</option>
+      <option value="remove" {{selected .Values.SponsorBlockMode "remove"}}>Remove segments</option>
+      <option value="mark" {{selected .Values.SponsorBlockMode "mark"}}>Mark as chapters</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="sponsorblock_categories">SponsorBlock categories <span class="optional">(optional, comma-separated)</span></label>
+    <input id="sponsorblock_categories" name="sponsorblock_categories" type="text" autocomplete="off"
+           value="{{.Values.SponsorBlockCategories}}" placeholder="sponsor, selfpromo, interaction">
+  </div>
+
+  <div class="field">
+    <label for="redownload_days">Re-download to improve quality after <span class="optional">(optional, days)</span></label>
+    <input id="redownload_days" name="redownload_days" type="number" min="0" inputmode="numeric"
+           value="{{.Values.RedownloadDays}}" placeholder="0 = never">
+  </div>
+
+  <div class="field">
+    <label for="extra_ytdlp_args">Extra yt-dlp options <span class="optional">(optional, one per line)</span></label>
+    <textarea id="extra_ytdlp_args" name="extra_ytdlp_args" rows="4" spellcheck="false"
+              placeholder="--sleep-requests&#10;1.5&#10;--force-ipv4">{{.Values.ExtraYtdlpArgs}}</textarea>
+    <p class="field-hint">Passed straight to yt-dlp on download. Put each flag and its value on its own line.</p>
+  </div>
+
+  <div class="field">
+    <label for="post_download_command">Post-download command <span class="optional">(optional)</span></label>
+    <input id="post_download_command" name="post_download_command" type="text" autocomplete="off"
+           value="{{.Values.PostDownloadCommand}}" placeholder="/config/scripts/on-download.sh">
+    <p class="field-hint">A script run after each successful download, with the downloaded file's path as its argument.</p>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{.SubmitLabel}}</button>
+    <a class="btn btn-secondary" href="/profiles">Cancel</a>
+  </div>
+</form>
+{{end}}

@@ -1,0 +1,28 @@
+{{define "title"}}Logs{{end}}
+{{define "content"}}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">System</div>
+    <h1>Logs</h1>
+    <p>Recent activity and errors — newest first. Refresh to update.</p>
+  </div>
+  <a class="btn btn-secondary" href="/logs">Refresh</a>
+</div>
+
+{{if .Records}}
+<div class="panel logs">
+  {{range .Records}}
+  <div class="logline lvl-{{lower .Level}}">
+    <span class="log-time">{{logTime .Time}}</span>
+    <span class="log-level">{{.Level}}</span>
+    <span class="log-msg">{{.Message}}</span>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="empty-state">
+  <h2>No log entries yet</h2>
+  <p>Activity will show up here as sub_scribe indexes sources and downloads videos.</p>
+</div>
+{{end}}
+{{end}}

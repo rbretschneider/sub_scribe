@@ -1,0 +1,23 @@
+# Build output
+/subscribe
+/subscribe.exe
+/dist/
+/out/
+
+# Local database and runtime data. These hold the user's own archive, their
+# YouTube cookies, and multi-gigabyte media files — none of it belongs in the
+# repository.
+*.db
+*.db-wal
+*.db-shm
+cookies.txt
+/config/
+/media/
+/.local-run/
+
+# Go
+/vendor/
+
+# Editor and tooling leftovers
+*.bak
+*.orig

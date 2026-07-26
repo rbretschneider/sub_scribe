@@ -1,0 +1,59 @@
+{{define "title"}}{{.Item.Media.Metadata.Title}}{{end}}
+{{define "content"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/library">Library</a>
+  <span aria-hidden="true">/</span>
+  <span aria-current="page">{{.Item.Media.Metadata.Title}}</span>
+</nav>
+
+<div class="page-head">
+  <div>
+    <div class="eyebrow">{{.Item.SourceName}}</div>
+    <h1>{{if .Item.Media.Metadata.Title}}{{.Item.Media.Metadata.Title}}{{else}}Untitled video{{end}}</h1>
+    <p><span class="status {{statusClass .Item.Media.Status}}"><span class="d"></span>{{statusLabel .Item.Media.Status}}</span></p>
+  </div>
+  <div class="head-actions">
+    {{if .CanRetry}}
+    <form method="post" action="/library/{{.Item.Media.ID}}/retry">
+      <button class="btn btn-primary" type="submit">Download again</button>
+    </form>
+    {{end}}
+    {{if .WatchURL}}<a class="btn btn-secondary" href="{{.WatchURL}}" rel="noopener noreferrer" target="_blank">Open on YouTube</a>{{end}}
+  </div>
+</div>
+
+<div class="panel">
+  <h2 class="panel-title">Details</h2>
+  <dl class="detail-grid">
+    <dt>Source</dt><dd><a href="/sources/{{.Item.Media.SourceID}}">{{.Item.SourceName}}</a></dd>
+    <dt>Video ID</dt><dd><code>{{.Item.Media.ExternalID}}</code></dd>
+    <dt>Published</dt><dd>{{formatDate .Item.Media.Metadata.UploadDate}}</dd>
+    {{with clock .Item.Media.Metadata.Duration}}<dt>Length</dt><dd>{{.}}</dd>{{end}}
+    <dt>Attempts</dt><dd>{{.Item.Media.Attempts}}</dd>
+    {{if .Item.Media.FilePath}}
+    <dt>File</dt><dd><code class="path">{{.Item.Media.FilePath}}</code></dd>
+    <dt>Size</dt><dd>{{bytes .Item.Media.FileSize}}</dd>
+    {{end}}
+    {{if .Item.Media.DownloadedAt}}
+    <dt>Downloaded</dt><dd>{{formatDateTime .Item.Media.DownloadedAt}}</dd>
+    {{end}}
+    <dt>Discovered</dt><dd>{{formatDateTime .Item.Media.CreatedAt}}</dd>
+  </dl>
+</div>
+
+{{if .Item.Media.LastError}}
+<div class="panel panel-danger">
+  <h2 class="panel-title">Last error</h2>
+  <pre class="error-text">{{.Item.Media.LastError}}</pre>
+  <p class="muted">Jobs for this video, with their full logs, are on the
+    <a href="/jobs">jobs</a> screen.</p>
+</div>
+{{end}}
+
+{{if .Item.Media.Metadata.Description}}
+<div class="panel">
+  <h2 class="panel-title">Description</h2>
+  <p class="description">{{.Item.Media.Metadata.Description}}</p>
+</div>
+{{end}}
+{{end}}

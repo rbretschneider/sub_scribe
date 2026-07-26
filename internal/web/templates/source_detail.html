@@ -1,0 +1,77 @@
+{{define "title"}}{{if .Source.Name}}{{.Source.Name}}{{else}}Source{{end}}{{end}}
+{{define "content"}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/sources">Sources</a> <span aria-hidden="true">/</span> <span aria-current="page">{{if .Source.Name}}{{.Source.Name}}{{else}}Fetching name…{{end}}</span>
+</nav>
+
+<div class="page-head">
+  <h1>{{if .Source.Name}}{{.Source.Name}}{{else}}Fetching name…{{end}}</h1>
+  {{if .Source.Enabled}}<span class="tag tag-on">Active</span>{{else}}<span class="tag tag-off">Paused</span>{{end}}
+  <div class="head-actions">
+    <form method="post" action="/sources/{{.Source.ID}}/scan">
+      <button class="btn btn-primary" type="submit">Scan now</button>
+    </form>
+    <form method="post" action="/sources/{{.Source.ID}}/enabled">
+      <input type="hidden" name="enabled" value="{{if .Source.Enabled}}false{{else}}true{{end}}">
+      <button class="btn btn-ghost" type="submit">{{if .Source.Enabled}}Pause scanning{{else}}Resume scanning{{end}}</button>
+    </form>
+    <a class="btn btn-secondary" href="/sources/{{.Source.ID}}/edit">Edit</a>
+  </div>
+</div>
+{{if not .Source.Enabled}}
+<div class="alert alert-info">
+  <p>This source is paused — it will not be scanned for new videos. Anything
+    already downloaded is untouched, and queued downloads still run.</p>
+</div>
+{{end}}
+
+<dl class="detail-grid">
+  <dt>URL</dt>
+  <dd><a href="{{.Source.URL}}" rel="noreferrer">{{.Source.URL}}</a></dd>
+
+  <dt>Type</dt>
+  <dd>{{titleCase (printf "%s" .Source.CollectionType)}}</dd>
+
+  <dt>Check frequency</dt>
+  <dd>Every {{hoursOf .Source.IndexFrequency}} hours</dd>
+
+  <dt>Cookies</dt>
+  <dd>{{titleCase (printf "%s" .Source.CookieBehavior)}}</dd>
+
+  <dt>Shorts</dt>
+  <dd>{{titleCase (printf "%s" .Source.ShortsRule)}}</dd>
+
+  <dt>Livestreams</dt>
+  <dd>{{titleCase (printf "%s" .Source.LivestreamsRule)}}</dd>
+
+  <dt>Published within</dt>
+  <dd>
+    {{if .Source.DownloadCutoff}}Since {{formatDate .Source.DownloadCutoff.UTC}}
+    {{else}}{{cutoffWindow .Source.CutoffWindow}}{{end}}
+    {{if or .Source.DownloadCutoff (gt (hoursOf .Source.CutoffWindow) 0)}}
+    <span class="field-hint">Anything older is found but not downloaded — it shows as
+      <a href="/library?status=skipped">Skipped</a>.</span>
+    {{end}}
+  </dd>
+
+  {{if .Source.TitleFilterPattern}}
+  <dt>Title filter</dt>
+  <dd><code>{{.Source.TitleFilterPattern}}</code></dd>
+  {{end}}
+
+  {{if .Source.RetentionAfter}}
+  <dt>Retention</dt>
+  <dd>Delete after {{daysOf .Source.RetentionAfter}} days</dd>
+  {{end}}
+</dl>
+
+<form class="form" method="post" action="/sources/{{.Source.ID}}/delete" data-confirm-delete
+      data-source-name="{{if .Source.Name}}{{.Source.Name}}{{else}}this source{{end}}"
+      data-file-count="{{.Stats.Files}}" data-file-size="{{bytes .Stats.Bytes}}">
+  <input type="hidden" name="delete_files" value="false">
+  <div class="form-actions">
+    <button class="btn btn-danger" type="submit">Delete source</button>
+    <a class="btn btn-secondary" href="/">Back to dashboard</a>
+  </div>
+</form>
+{{end}}

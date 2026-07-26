@@ -1,0 +1,75 @@
+{{define "title"}}Jobs{{end}}
+{{define "content"}}
+<div data-live="4000">
+<div class="page-head">
+  <div>
+    <div class="eyebrow">System</div>
+    <h1>{{if .Active}}{{.Active}} job{{if ne .Active 1}}s{{end}} in flight{{else}}Queue is idle{{end}}</h1>
+    <p>Every scan and download runs here. Select a job to see its details and log output.</p>
+  </div>
+  <div class="head-actions">
+    {{if .Finished}}
+    <form method="post" action="/jobs/clear"
+          onsubmit="return confirm('Clear all {{.Finished}} finished jobs? Queued and running work is left alone.');">
+      <button class="btn btn-ghost" type="submit">Clear finished ({{.Finished}})</button>
+    </form>
+    {{end}}
+    <a class="btn btn-secondary" href="/jobs{{if .Filter}}?status={{.Filter}}{{end}}">Refresh</a>
+  </div>
+</div>
+
+<div class="filters">
+  <a class="chip" href="/jobs"{{if eq .Filter ""}} aria-current="true"{{end}}>All</a>
+  <a class="chip" href="/jobs?status=running"{{if eq .Filter "running"}} aria-current="true"{{end}}>Running · {{index .Counts "running"}}</a>
+  <a class="chip" href="/jobs?status=queued"{{if eq .Filter "queued"}} aria-current="true"{{end}}>Queued · {{index .Counts "queued"}}</a>
+  <a class="chip" href="/jobs?status=failed"{{if eq .Filter "failed"}} aria-current="true"{{end}}>Failed · {{index .Counts "failed"}}</a>
+  <a class="chip" href="/jobs?status=succeeded"{{if eq .Filter "succeeded"}} aria-current="true"{{end}}>Done · {{index .Counts "succeeded"}}</a>
+</div>
+
+{{if .Items}}
+<div class="panel table-wrap">
+  <table class="table jobs-table">
+    <caption class="visually-hidden">Background jobs, most recent activity first</caption>
+    <thead>
+      <tr>
+        <th scope="col">Job</th>
+        <th scope="col">Target</th>
+        <th scope="col">Status</th>
+        <th scope="col">Attempts</th>
+        <th scope="col">Updated</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Items}}
+      <tr>
+        <th scope="row" class="job-cell">
+          <a class="job-link" href="/jobs/{{.Task.ID}}">
+            <span class="job-type">{{jobTypeLabel .Task.Type}}</span>
+            <span class="job-id">#{{.Task.ID}}</span>
+          </a>
+        </th>
+        <td class="job-target">
+          {{if .MediaTitle}}<span class="job-title">{{.MediaTitle}}</span>{{end}}
+          {{if .SourceName}}<span class="job-chan">{{.SourceName}}</span>{{end}}
+          {{if and (not .MediaTitle) (not .SourceName)}}<span class="muted">—</span>{{end}}
+        </td>
+        <td>
+          <span class="status {{jobStatusClass .Task.Status}}"><span class="d"></span>{{jobStatusLabel .Task.Status}}</span>
+          {{if .MediaStatus}}<span class="status {{statusClass .MediaStatus}} outcome"><span class="d"></span>{{statusLabel .MediaStatus}}</span>{{end}}
+        </td>
+        <td class="num">{{.Task.Attempts}}/{{.Task.MaxAttempts}}</td>
+        <td class="job-when">{{formatDateTime .Task.UpdatedAt}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="empty-state">
+  <h2>No jobs {{if .Filter}}with this status{{else}}yet{{end}}</h2>
+  <p>{{if .Filter}}Nothing is sitting in this state right now.{{else}}Jobs appear as soon as a source is scanned or a download starts.{{end}}</p>
+  {{if .Filter}}<a class="btn btn-secondary" href="/jobs">Show all jobs</a>{{else}}<a class="btn btn-primary" href="/sources/new">Add a source</a>{{end}}
+</div>
+{{end}}
+</div>
+{{end}}
