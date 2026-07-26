@@ -139,8 +139,8 @@ func TestCreateProfileValidRedirectsAndCreatesOnce(t *testing.T) {
 	if profiles.created.Name != "1080p Plex" || profiles.created.Kind != domain.MediaVideo {
 		t.Errorf("created profile = %+v, want name 1080p Plex / video", profiles.created)
 	}
-	if profiles.created.MetadataFormat != domain.MetadataPlex {
-		t.Errorf("created MetadataFormat = %q, want plex", profiles.created.MetadataFormat)
+	if profiles.created.MetadataFormat != domain.MetadataEpisode {
+		t.Errorf("created MetadataFormat = %q, want episode", profiles.created.MetadataFormat)
 	}
 }
 
@@ -292,7 +292,7 @@ func validProfileForm() url.Values {
 	form.Set("output_path_template", "{{ source_name }}/{{ title }}")
 	form.Set("kind", "video")
 	form.Set("quality_format", "bestvideo+bestaudio")
-	form.Set("metadata_format", "plex")
+	form.Set("metadata_format", "episode")
 	form.Set("sponsorblock_mode", "off")
 	form.Set("redownload_days", "0")
 	return form

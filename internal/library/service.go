@@ -416,11 +416,12 @@ func (s *Service) validateProfile(profile domain.MediaProfile) error {
 	return nil
 }
 
-// withMetadataDefault fills an unset metadata format with the Jellyfin/Kodi
-// default, keeping older or programmatically-built profiles valid.
+// withMetadataDefault fills an unset metadata format with the episode layout,
+// which matches the season-based output template, keeping older or
+// programmatically-built profiles valid.
 func withMetadataDefault(profile domain.MediaProfile) domain.MediaProfile {
 	if profile.MetadataFormat == "" {
-		profile.MetadataFormat = domain.MetadataJellyfin
+		profile.MetadataFormat = domain.MetadataEpisode
 	}
 	return profile
 }
@@ -623,7 +624,7 @@ func (s *Service) DownloadMedia(ctx context.Context, mediaID int64) error {
 		return s.markSkipped(ctx, mediaID, media, now)
 	}
 
-	rel, err := s.deps.Naming.Render(profile.OutputPathTemplate, naming.NewContext(source.Name, media))
+	rel, err := s.renderOutputPath(ctx, profile, source, media)
 	if err != nil {
 		return fmt.Errorf("render output path: %w", err)
 	}
@@ -684,6 +685,21 @@ func (s *Service) ensureMetadata(ctx context.Context, source domain.Source, medi
 		return media, fmt.Errorf("persist refreshed metadata: %w", err)
 	}
 	return media, nil
+}
+
+// renderOutputPath renders a media item's destination path, relative to the media
+// directory. It resolves the item's rank among same-day uploads so a season-based
+// template can give each one a distinct episode number.
+//
+// Every caller that needs a path goes through here — downloading and adopting
+// alike — because the two must agree exactly or an already-downloaded file looks
+// missing.
+func (s *Service) renderOutputPath(ctx context.Context, profile domain.MediaProfile, source domain.Source, media domain.Media) (string, error) {
+	context := naming.NewContext(source.Name, media)
+	if index, err := s.deps.Media.SameDayIndex(ctx, media.ID); err == nil {
+		context = context.WithSameDayIndex(index)
+	}
+	return s.deps.Naming.Render(profile.OutputPathTemplate, context)
 }
 
 // isOutsideWindow reports whether an item was published before the source's

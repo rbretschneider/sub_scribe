@@ -34,22 +34,30 @@ func (m SponsorBlockMode) IsValid() bool {
 	return m == SponsorBlockOff || m == SponsorBlockRemove || m == SponsorBlockMark
 }
 
-// MetadataFormat selects the sidecar layout written for downloaded media so it
-// matches the target media server. Jellyfin/Kodi/Emby read TV-style
-// <episodedetails> NFO natively; Plex treats each video as a movie and reads
-// <movie> NFO via its NFO agent.
+// MetadataFormat selects the shape of the sidecar .nfo written beside each
+// download. It describes the *library layout* rather than a particular media
+// server, because the sidecar has to agree with the folder structure the output
+// template produces — a season-based layout with movie metadata in it is
+// self-contradictory, and readers handle it badly.
+//
+// This deliberately does not name Plex or Jellyfin. Kodi, Jellyfin and Emby all
+// read the same Kodi-derived format, and Plex reads no .nfo at all without a
+// third-party agent, so a per-server distinction was never real.
 type MetadataFormat string
 
 const (
-	// MetadataJellyfin writes a Kodi/Jellyfin/Emby <episodedetails> NFO.
-	MetadataJellyfin MetadataFormat = "jellyfin"
-	// MetadataPlex writes a Plex-oriented <movie> NFO.
-	MetadataPlex MetadataFormat = "plex"
+	// MetadataEpisode writes an <episodedetails> NFO, matching a season-based
+	// layout such as "Channel/Season 2026/…". This is the default because the
+	// default output template is season-based.
+	MetadataEpisode MetadataFormat = "episode"
+	// MetadataMovie writes a <movie> NFO, for a flat layout where each video
+	// stands alone rather than belonging to a season.
+	MetadataMovie MetadataFormat = "movie"
 )
 
 // IsValid reports whether the metadata format is a recognized value.
 func (m MetadataFormat) IsValid() bool {
-	return m == MetadataJellyfin || m == MetadataPlex
+	return m == MetadataEpisode || m == MetadataMovie
 }
 
 // MediaProfile is a reusable bundle of "how and where to download" settings that

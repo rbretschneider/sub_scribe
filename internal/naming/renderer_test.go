@@ -100,3 +100,54 @@ func TestValidateAcceptsAllKnownVariables(t *testing.T) {
 		t.Errorf("Validate() unexpected error = %v", err)
 	}
 }
+
+// TestSeasonEpisodeMatchesMediaCentreLayout pins the filename shape media servers
+// actually parse. Plex reads "sYYYYeMMDDNN - Title" and takes the title from the
+// filename; given a plain date it instead tries to match the channel against its
+// TV database, fails, and shows invented names like "Episode 04-22".
+func TestSeasonEpisodeMatchesMediaCentreLayout(t *testing.T) {
+	media := domain.Media{
+		ExternalID: "G3gcztlSR24",
+		Metadata: domain.MediaMetadata{
+			Title:      "Wife Discovers Her Husband's Sick Secret",
+			UploadDate: time.Date(2025, 9, 19, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	template := "{{ source_name }}/Season {{ upload_year }}/{{ season_episode }} - {{ title }}"
+
+	got, err := NewRenderer().Render(template, NewContext("EWU Bodycam", media))
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	want := "EWU Bodycam/Season 2025/s2025e091901 - Wife Discovers Her Husband's Sick Secret"
+	if got != want {
+		t.Errorf("Render() =\n %q\nwant\n %q", got, want)
+	}
+}
+
+func TestSameDayUploadsGetDistinctEpisodeNumbers(t *testing.T) {
+	// Two videos published the same day would otherwise share an episode number,
+	// and a media server would show only one of them.
+	media := domain.Media{Metadata: domain.MediaMetadata{
+		Title:      "Second Of The Day",
+		UploadDate: time.Date(2026, 7, 22, 0, 0, 0, 0, time.UTC),
+	}}
+	renderer := NewRenderer()
+
+	first, err := renderer.Render("{{ season_episode }}", NewContext("Chan", media).WithSameDayIndex(1))
+	if err != nil {
+		t.Fatalf("Render first: %v", err)
+	}
+	second, err := renderer.Render("{{ season_episode }}", NewContext("Chan", media).WithSameDayIndex(2))
+	if err != nil {
+		t.Fatalf("Render second: %v", err)
+	}
+
+	if first != "s2026e072201" {
+		t.Errorf("first = %q, want s2026e072201", first)
+	}
+	if second != "s2026e072202" {
+		t.Errorf("second = %q, want s2026e072202", second)
+	}
+}

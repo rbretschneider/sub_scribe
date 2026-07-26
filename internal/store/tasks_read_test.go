@@ -45,7 +45,7 @@ func newQueueFixture(t *testing.T) queueFixture {
 
 	profileID, err := db.Profiles().Create(ctx, domain.MediaProfile{
 		Name: "P", OutputPathTemplate: "{{ title }}", Kind: domain.MediaVideo,
-		MetadataFormat: domain.MetadataPlex, CreatedAt: now, UpdatedAt: now,
+		MetadataFormat: domain.MetadataMovie, CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("create profile: %v", err)

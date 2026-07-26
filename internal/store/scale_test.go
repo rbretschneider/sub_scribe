@@ -34,7 +34,7 @@ func seedLargeArchive(tb testing.TB) *DB {
 	ctx := context.Background()
 	profileID, err := db.Profiles().Create(ctx, domain.MediaProfile{
 		Name: "Bench", OutputPathTemplate: "{{ source_name }}/{{ title }}",
-		Kind: domain.MediaVideo, MetadataFormat: domain.MetadataPlex,
+		Kind: domain.MediaVideo, MetadataFormat: domain.MetadataMovie,
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {

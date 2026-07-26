@@ -71,14 +71,34 @@ the **Jobs** screen shows it working.
 Files are named the way media servers expect, for example:
 
 ```
-Computerphile/Season 2026/Computerphile - 2026-07-16 - GPS Hidden Messages [2Q6OvYjOJi0].mkv
-Computerphile/Season 2026/Computerphile - 2026-07-16 - GPS Hidden Messages [2Q6OvYjOJi0].jpg
-Computerphile/Season 2026/Computerphile - 2026-07-16 - GPS Hidden Messages [2Q6OvYjOJi0].nfo
+Computerphile/Season 2026/s2026e071601 - GPS Hidden Messages.mkv
+Computerphile/Season 2026/s2026e071601 - GPS Hidden Messages.jpg
+Computerphile/Season 2026/s2026e071601 - GPS Hidden Messages.nfo
 ```
 
-Point Plex or Jellyfin at that same media folder — as a **TV Shows** library,
-with the local-media-assets agent enabled — and each channel appears as a show,
-each year as a season, with artwork and metadata already in place.
+`s2026e071601` is season-by-year, episode-by-upload-date, plus a two-digit index
+so two videos posted on the same day get distinct episode numbers. That token is
+what makes the layout work: a media server parses it and takes the title from the
+rest of the filename.
+
+### Pointing a media server at it
+
+Add the media folder as a **TV Shows** library. Each channel becomes a show and
+each year a season.
+
+**Plex** needs one setting changed, or it will show invented titles like
+`Episode 04-22`:
+
+- Library → *Edit* → **Advanced**
+- **Agent: Personal Media Shows**
+
+That tells Plex to take titles from the filenames instead of trying to match your
+channel against its TV database. Note that **Plex does not read `.nfo` files** —
+it has no native NFO agent — so the sidecars are there for other servers and for
+the third-party XBMCnfo agent if you use it.
+
+**Jellyfin, Emby and Kodi** read the `.nfo` sidecars natively and need no extra
+configuration.
 
 ### Upgrading
 

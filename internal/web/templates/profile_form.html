@@ -28,8 +28,14 @@
            value="{{.Values.OutputPathTemplate}}">
     <p class="field-hint">Variables: <code>{{"{{ source_name }}"}}</code>, <code>{{"{{ title }}"}}</code>,
       <code>{{"{{ upload_date }}"}}</code>, <code>{{"{{ upload_year }}"}}</code>,
+      <code>{{"{{ upload_mmdd }}"}}</code>, <code>{{"{{ season_episode }}"}}</code>,
       <code>{{"{{ id }}"}}</code>, <code>{{"{{ uploader }}"}}</code>,
       <code>{{"{{ season }}"}}</code>, <code>{{"{{ episode }}"}}</code>. Use <code>/</code> for folders.</p>
+    <p class="field-hint"><b>Keep <code>{{"{{ season_episode }}"}}</code> if you use Plex.</b> It renders as
+      <code>s2026e072201</code> — season by year, episode by upload date, plus an index for
+      same-day uploads. Plex reads that and takes the title from the rest of the filename.
+      With a plain date instead it tries to match your channel against its TV database,
+      fails, and shows made-up names like <code>Episode 04-22</code>.</p>
   </div>
 
   <div class="field">
@@ -41,12 +47,15 @@
   </div>
 
   <div class="field">
-    <label for="metadata_format">Metadata layout</label>
+    <label for="metadata_format">Sidecar metadata</label>
     <select id="metadata_format" name="metadata_format">
-      <option value="plex" {{selected .Values.MetadataFormat "plex"}}>Plex (movie .nfo)</option>
-      <option value="jellyfin" {{selected .Values.MetadataFormat "jellyfin"}}>Jellyfin / Kodi / Emby (episode .nfo)</option>
+      <option value="episode" {{selected .Values.MetadataFormat "episode"}}>Episode — for a season-based layout</option>
+      <option value="movie" {{selected .Values.MetadataFormat "movie"}}>Movie — for a flat layout</option>
     </select>
-    <p class="field-hint">Which media server reads the sidecar <code>.nfo</code> files. Plex treats each video as a movie; Jellyfin/Kodi read TV-style episode metadata natively.</p>
+    <p class="field-hint">Match this to the layout above: a <code>Season {{"{{"}} upload_year {{"}}"}}</code>
+      folder wants episode metadata. Jellyfin, Kodi and Emby read these
+      <code>.nfo</code> files natively; Plex ignores them entirely unless you add
+      the third-party XBMCnfo agent, and takes its titles from the filename instead.</p>
   </div>
 
   <div class="field">

@@ -45,9 +45,15 @@ const eventsPath = "/events"
 // requests before forcing close.
 const shutdownTimeout = 10 * time.Second
 
-// defaultProfileTemplate is the Plex/Jellyfin-friendly naming layout seeded on
-// first run so a user can add a source immediately.
-const defaultProfileTemplate = "{{ source_name }}/Season {{ upload_year }}/{{ source_name }} - {{ upload_date }} - {{ title }} [{{ id }}]"
+// defaultProfileTemplate is the naming layout seeded on first run.
+//
+// The season/episode token is what makes media servers read these files
+// correctly. Plex parses "sYYYYeMMDDNN - Title" and takes the title from the
+// filename; given a plain date instead it tries to match the channel against its
+// TV database, fails, and invents titles like "Episode 04-22". The layout
+// deliberately matches what pinchflat writes for media centres, because that is
+// known to work.
+const defaultProfileTemplate = "{{ source_name }}/Season {{ upload_year }}/{{ season_episode }} - {{ title }}"
 
 // defaultQualityFormat is the seeded profile's yt-dlp format selector.
 const defaultQualityFormat = "bestvideo[height<=1080]+bestaudio/best"
@@ -266,7 +272,7 @@ func seedDefaultProfile(ctx context.Context, db *store.DB, svc *library.Service,
 		OutputPathTemplate: defaultProfileTemplate,
 		Kind:               domain.MediaVideo,
 		QualityFormat:      defaultQualityFormat,
-		MetadataFormat:     domain.MetadataPlex,
+		MetadataFormat:     domain.MetadataEpisode,
 		EmbedMetadata:      true,
 		EmbedThumbnail:     true,
 		WriteThumbnail:     true,

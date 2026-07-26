@@ -35,7 +35,7 @@ func seedProfile(t *testing.T, db *DB) domain.MediaProfile {
 		OutputPathTemplate: "{uploader}/{title}",
 		Kind:               domain.MediaVideo,
 		QualityFormat:      "bestvideo[height<=1080]+bestaudio",
-		MetadataFormat:     domain.MetadataPlex,
+		MetadataFormat:     domain.MetadataMovie,
 		EmbedMetadata:      true,
 		EmbedThumbnail:     true,
 		EmbedSubtitles:     true,
@@ -105,7 +105,7 @@ func TestProfileRoundTrip(t *testing.T) {
 	// Update mutates every field including the JSON lists and duration.
 	want.Name = "720p Audio"
 	want.Kind = domain.MediaAudio
-	want.MetadataFormat = domain.MetadataJellyfin
+	want.MetadataFormat = domain.MetadataEpisode
 	want.ExtraYtdlpArgs = []string{"--force-ipv4"}
 	want.PostDownloadCommand = ""
 	want.SubtitleLanguages = []string{"fr"}

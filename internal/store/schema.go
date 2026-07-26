@@ -163,6 +163,18 @@ var migrations = []migration{
 		// Same for the jobs screen, which orders by most recent activity.
 		stmt: `CREATE INDEX idx_tasks_updated ON tasks(updated_at DESC, id DESC)`,
 	},
+	{
+		version: 15,
+		name:    "metadata_format_describes_layout",
+		// The sidecar shape has to match the folder layout, not a brand. Both old
+		// values become "episode" because the layout every profile produces is
+		// season-based: the "plex" option had been writing movie metadata into a
+		// season-based tree, which reads badly everywhere and which Plex ignored
+		// entirely. A flat layout can opt into "movie" explicitly.
+		stmt: `UPDATE media_profiles
+			SET metadata_format = 'episode'
+			WHERE metadata_format IN ('plex', 'jellyfin')`,
+	},
 }
 
 // migrate applies every migration not yet recorded, each in its own transaction,

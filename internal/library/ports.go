@@ -42,6 +42,9 @@ type MediaRepo interface {
 	// ListWithSource returns media joined to their source name, newest first,
 	// optionally filtered to one status (empty = all). limit <= 0 means no cap.
 	ListWithSource(ctx context.Context, status domain.MediaStatus, limit int) ([]MediaListItem, error)
+	// SameDayIndex returns the 1-based rank of an item among those sharing its
+	// upload date, so episode numbering can separate same-day uploads.
+	SameDayIndex(ctx context.Context, id int64) (int, error)
 	// GetWithSource returns one media item joined to its source name.
 	GetWithSource(ctx context.Context, id int64) (MediaListItem, error)
 	// StatsBySource returns downloaded file counts and sizes keyed by source id.

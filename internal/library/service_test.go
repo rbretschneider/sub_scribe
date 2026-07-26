@@ -198,6 +198,25 @@ func (r *fakeMediaRepo) TotalDownloadedBytes(_ context.Context) (int64, error) {
 	return total, nil
 }
 
+func (r *fakeMediaRepo) SameDayIndex(_ context.Context, id int64) (int, error) {
+	media, ok := r.items[id]
+	if !ok {
+		return 1, nil
+	}
+	index := 0
+	for otherID, other := range r.items {
+		same := other.SourceID == media.SourceID &&
+			other.Metadata.UploadDate.Equal(media.Metadata.UploadDate)
+		if same && otherID <= id {
+			index++
+		}
+	}
+	if index < 1 {
+		index = 1
+	}
+	return index, nil
+}
+
 func (r *fakeMediaRepo) StatsBySource(_ context.Context) (map[int64]SourceStats, error) {
 	stats := make(map[int64]SourceStats)
 	for _, m := range r.items {
@@ -280,7 +299,7 @@ func TestEnforceRedownloadRequeuesOnlyStaleMedia(t *testing.T) {
 	ctx := context.Background()
 	profileID, err := h.profiles.Create(ctx, domain.MediaProfile{
 		Name: "Refresh weekly", OutputPathTemplate: "{{ title }}", Kind: domain.MediaVideo,
-		SponsorBlockMode: domain.SponsorBlockOff, MetadataFormat: domain.MetadataPlex,
+		SponsorBlockMode: domain.SponsorBlockOff, MetadataFormat: domain.MetadataMovie,
 		RedownloadAfter: 7 * 24 * time.Hour,
 	})
 	if err != nil {
@@ -346,7 +365,7 @@ func TestDownloadMediaAppliesCustomOptionsAndHook(t *testing.T) {
 	ctx := context.Background()
 	profileID, err := h.profiles.Create(ctx, domain.MediaProfile{
 		Name: "Custom", OutputPathTemplate: "{{ title }}", Kind: domain.MediaVideo,
-		SponsorBlockMode: domain.SponsorBlockOff, MetadataFormat: domain.MetadataPlex,
+		SponsorBlockMode: domain.SponsorBlockOff, MetadataFormat: domain.MetadataMovie,
 		ExtraYtdlpArgs:      []string{"--sleep-requests", "2"},
 		PostDownloadCommand: "/opt/notify.sh",
 	})
@@ -722,7 +741,7 @@ func (h *harness) seedProfile(t *testing.T) int64 {
 		OutputPathTemplate: "{{ source_name }}/{{ title }}",
 		Kind:               domain.MediaVideo,
 		QualityFormat:      "bestvideo+bestaudio",
-		MetadataFormat:     domain.MetadataPlex,
+		MetadataFormat:     domain.MetadataMovie,
 		SponsorBlockMode:   domain.SponsorBlockOff,
 	})
 	if err != nil {
@@ -1051,8 +1070,8 @@ func TestDownloadMediaSuccess(t *testing.T) {
 	if h.metadata.calls != 1 {
 		t.Errorf("expected metadata written once, got %d", h.metadata.calls)
 	}
-	if h.metadata.lastFormat != domain.MetadataPlex {
-		t.Errorf("expected metadata format %q passed to writer, got %q", domain.MetadataPlex, h.metadata.lastFormat)
+	if h.metadata.lastFormat != domain.MetadataMovie {
+		t.Errorf("expected metadata format %q passed to writer, got %q", domain.MetadataMovie, h.metadata.lastFormat)
 	}
 	if h.feed.calls != 1 {
 		t.Errorf("expected feed regenerated once, got %d", h.feed.calls)

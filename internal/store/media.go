@@ -220,6 +220,29 @@ func (r *MediaRepo) ListWithSource(ctx context.Context, status domain.MediaStatu
 	return items, rows.Err()
 }
 
+// SameDayIndex returns the 1-based rank of a media item among the items from the
+// same source sharing its upload date, ordered by discovery.
+//
+// A season-per-year layout numbers episodes by upload date, so two videos posted
+// on one day would otherwise be the same episode and a media server would show
+// only one of them. Ranking by id keeps a given video's number stable once
+// assigned: later uploads get later numbers and never renumber what came before.
+func (r *MediaRepo) SameDayIndex(ctx context.Context, id int64) (int, error) {
+	var index int
+	err := r.sql.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM media AS peer
+		 WHERE peer.source_id = (SELECT source_id FROM media WHERE id = ?)
+		   AND peer.upload_date = (SELECT upload_date FROM media WHERE id = ?)
+		   AND peer.id <= ?`, id, id, id).Scan(&index)
+	if err != nil {
+		return 0, fmt.Errorf("store: same-day index %d: %w", id, err)
+	}
+	if index < 1 {
+		index = 1
+	}
+	return index, nil
+}
+
 // StatsBySource returns the count and total size of downloaded media per source,
 // so the UI can say exactly what deleting a source would destroy.
 func (r *MediaRepo) StatsBySource(ctx context.Context) (map[int64]library.SourceStats, error) {

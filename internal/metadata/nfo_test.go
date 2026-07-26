@@ -141,8 +141,8 @@ func TestBuildNFODispatchesOnFormat(t *testing.T) {
 		format   domain.MetadataFormat
 		wantRoot string
 	}{
-		{name: "plex -> movie", format: domain.MetadataPlex, wantRoot: "<movie>"},
-		{name: "jellyfin -> episode", format: domain.MetadataJellyfin, wantRoot: "<episodedetails>"},
+		{name: "plex -> movie", format: domain.MetadataMovie, wantRoot: "<movie>"},
+		{name: "jellyfin -> episode", format: domain.MetadataEpisode, wantRoot: "<episodedetails>"},
 		{name: "empty falls back to episode", format: "", wantRoot: "<episodedetails>"},
 	}
 	for _, tt := range tests {
@@ -166,7 +166,7 @@ func TestWriteForPlexWritesMovieNFO(t *testing.T) {
 	}
 
 	w := NewWriter()
-	if err := w.WriteFor(context.Background(), mediaPath, sampleMedia(), "Chan", domain.MetadataPlex); err != nil {
+	if err := w.WriteFor(context.Background(), mediaPath, sampleMedia(), "Chan", domain.MetadataMovie); err != nil {
 		t.Fatalf("WriteFor: %v", err)
 	}
 
@@ -187,7 +187,7 @@ func TestWriteForCreatesSidecar(t *testing.T) {
 	}
 
 	w := NewWriter()
-	if err := w.WriteFor(context.Background(), mediaPath, sampleMedia(), "My Channel", domain.MetadataJellyfin); err != nil {
+	if err := w.WriteFor(context.Background(), mediaPath, sampleMedia(), "My Channel", domain.MetadataEpisode); err != nil {
 		t.Fatalf("WriteFor: %v", err)
 	}
 
@@ -213,7 +213,7 @@ func TestWriteForCancelledContext(t *testing.T) {
 	cancel()
 
 	w := NewWriter()
-	if err := w.WriteFor(ctx, mediaPath, sampleMedia(), "Src", domain.MetadataPlex); err == nil {
+	if err := w.WriteFor(ctx, mediaPath, sampleMedia(), "Src", domain.MetadataMovie); err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "video.nfo")); !os.IsNotExist(err) {

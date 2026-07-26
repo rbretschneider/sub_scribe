@@ -16,6 +16,7 @@ var tokenPattern = regexp.MustCompile(`\{\{\s*([a-z_]+)\s*\}\}`)
 var knownVariables = map[Variable]struct{}{
 	VarSourceName: {}, VarUploader: {}, VarTitle: {}, VarID: {},
 	VarUploadDate: {}, VarUploadYear: {}, VarSeason: {}, VarEpisode: {},
+	VarUploadMMDD: {}, VarSeasonEpisode: {},
 }
 
 // Renderer turns path templates into concrete relative paths. It is stateless

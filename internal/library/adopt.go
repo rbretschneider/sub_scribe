@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"sub_scribe/internal/domain"
-	"sub_scribe/internal/naming"
 	"sub_scribe/internal/ytdlp"
 )
 
@@ -203,8 +202,7 @@ func (r *pathResolver) basePathFor(ctx context.Context, media domain.Media) (str
 	if !ok {
 		return "", false
 	}
-	rendered, err := r.service.deps.Naming.Render(
-		profile.OutputPathTemplate, naming.NewContext(source.Name, media))
+	rendered, err := r.service.renderOutputPath(ctx, profile, source, media)
 	if err != nil {
 		return "", false
 	}

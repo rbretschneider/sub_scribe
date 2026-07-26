@@ -58,7 +58,7 @@ func defaultProfileFormValues() profileFormValues {
 		OutputPathTemplate: defaultTemplateHint,
 		Kind:               string(domain.MediaVideo),
 		QualityFormat:      "bestvideo[height<=1080]+bestaudio/best",
-		MetadataFormat:     string(domain.MetadataPlex),
+		MetadataFormat:     string(domain.MetadataMovie),
 		EmbedMetadata:      true,
 		EmbedThumbnail:     true,
 		WriteThumbnail:     true,

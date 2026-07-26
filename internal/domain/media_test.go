@@ -115,7 +115,7 @@ func TestMediaStatusIsTerminal(t *testing.T) {
 }
 
 func TestMetadataFormatIsValid(t *testing.T) {
-	valid := []MetadataFormat{MetadataPlex, MetadataJellyfin}
+	valid := []MetadataFormat{MetadataMovie, MetadataEpisode}
 	for _, f := range valid {
 		if !f.IsValid() {
 			t.Errorf("format %q should be valid", f)

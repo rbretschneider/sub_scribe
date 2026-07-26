@@ -38,9 +38,9 @@ type uniqueID struct {
 	Value string `xml:",chardata"`
 }
 
-// movieDetails is the root <movie> element of a Plex/Kodi movie NFO document.
-// Plex libraries treat each archived video as a movie, so this shape is what its
-// NFO agent consumes.
+// movieDetails is the root <movie> element of a Kodi-style movie NFO document,
+// for a flat library where each video stands alone rather than belonging to a
+// season.
 type movieDetails struct {
 	XMLName   xml.Name `xml:"movie"`
 	Title     string   `xml:"title"`
@@ -56,7 +56,7 @@ type movieDetails struct {
 // empty or unrecognized format falls back to the Jellyfin layout, since the
 // Kodi/Jellyfin NFO is the widely-read default.
 func BuildNFO(media domain.Media, sourceName string, format domain.MetadataFormat) ([]byte, error) {
-	if format == domain.MetadataPlex {
+	if format == domain.MetadataMovie {
 		return BuildMovieNFO(media, sourceName)
 	}
 	return BuildEpisodeNFO(media, sourceName)
