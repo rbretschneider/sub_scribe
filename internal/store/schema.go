@@ -175,6 +175,24 @@ var migrations = []migration{
 			SET metadata_format = 'episode'
 			WHERE metadata_format IN ('plex', 'jellyfin')`,
 	},
+	{
+		version: 16,
+		name:    "season_episode_naming_default",
+		// The previous default put a plain date in the filename, which media
+		// servers cannot turn into an episode: Plex matches the channel against its
+		// TV database, fails, and shows invented names like "Episode 04-22". The
+		// season/episode token fixes that.
+		//
+		// Only profiles still on the exact old default are rewritten — a template
+		// the user edited is theirs. Files already downloaded under the old name no
+		// longer match the new one and will be fetched again; startup recovery
+		// adopts anything that does still match.
+		stmt: `UPDATE media_profiles
+			SET output_path_template =
+				'{{ source_name }}/Season {{ upload_year }}/{{ season_episode }} - {{ title }}'
+			WHERE output_path_template =
+				'{{ source_name }}/Season {{ upload_year }}/{{ source_name }} - {{ upload_date }} - {{ title }} [{{ id }}]'`,
+	},
 }
 
 // migrate applies every migration not yet recorded, each in its own transaction,
