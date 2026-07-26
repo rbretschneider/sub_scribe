@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"sub_scribe/internal/domain"
 )
@@ -102,6 +103,74 @@ func TestSetSourceEnabledReturnsToThePageItWasCalledFrom(t *testing.T) {
 				t.Errorf("Location = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestRetentionAcceptsAPresetOrACustomDayCount(t *testing.T) {
+	tests := []struct {
+		name    string
+		preset  string
+		days    string
+		wantDur time.Duration
+	}{
+		{"a preset period", "90", "", 90 * 24 * time.Hour},
+		{"custom takes the typed value", "custom", "45", 45 * 24 * time.Hour},
+		{"empty keeps everything", "", "", 0},
+		// A stale number left in the hidden box must not override the dropdown.
+		{"preset wins over a leftover number", "30", "999", 30 * 24 * time.Hour},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			values := sourceFormValues{
+				Name: "C", URL: "https://youtube.com/@c", CollectionType: "channel",
+				MediaProfileID: "1", CookieBehavior: "when_needed", FrequencyHours: "6",
+				ShortsRule: "include", LivestreamsRule: "include",
+				RetentionPreset: test.preset, RetentionDays: test.days,
+			}
+
+			input, err := values.toInput()
+			if err != nil {
+				t.Fatalf("toInput: %v", err)
+			}
+			if input.RetentionAfter != test.wantDur {
+				t.Errorf("RetentionAfter = %v, want %v", input.RetentionAfter, test.wantDur)
+			}
+		})
+	}
+}
+
+func TestRetentionDropdownPreselectsAStoredPeriod(t *testing.T) {
+	tests := []struct {
+		name      string
+		retention time.Duration
+		want      string
+	}{
+		{"an offered period selects itself", 90 * 24 * time.Hour, "90"},
+		{"an unusual period falls back to custom", 45 * 24 * time.Hour, "custom"},
+		{"no retention selects never", 0, ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := fromSource(domain.Source{RetentionAfter: test.retention})
+
+			if got.RetentionPreset != test.want {
+				t.Errorf("RetentionPreset = %q, want %q", got.RetentionPreset, test.want)
+			}
+		})
+	}
+}
+
+func TestSourceFormOffersRetentionShortcuts(t *testing.T) {
+	server := newTestServer(t, &fakeSources{}, &fakeProfiles{}, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sources/new", nil))
+	body := rec.Body.String()
+
+	for _, want := range []string{`name="retention_preset"`, ">30 days<", ">60 days<", ">90 days<"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("source form missing retention shortcut %q", want)
+		}
 	}
 }
 

@@ -26,6 +26,7 @@ const (
 	fieldShortsRule      = "shorts_rule"
 	fieldLivestreamsRule = "livestreams_rule"
 	fieldRetentionDays   = "retention_days"
+	fieldRetentionPreset = "retention_preset"
 )
 
 // hoursPerDayDuration converts a whole-day count into a duration.
@@ -46,6 +47,9 @@ type sourceFormValues struct {
 	TitleFilter     string
 	ShortsRule      string
 	LivestreamsRule string
+	// RetentionPreset is the dropdown selection: a day count, "custom" to use
+	// RetentionDays, or empty to keep everything.
+	RetentionPreset string
 	RetentionDays   string
 }
 
@@ -65,8 +69,28 @@ func fromSource(source domain.Source) sourceFormValues {
 		TitleFilter:     source.TitleFilterPattern,
 		ShortsRule:      string(source.ShortsRule),
 		LivestreamsRule: string(source.LivestreamsRule),
+		RetentionPreset: retentionPresetValue(source.RetentionAfter),
 		RetentionDays:   optionalDaysString(source.RetentionAfter),
 	}
+}
+
+// retentionPresetOptions are the day counts the dropdown offers directly. Any
+// other stored value falls back to the custom field so an existing source is
+// never silently rounded to a preset.
+var retentionPresetOptions = map[int]bool{30: true, 60: true, 90: true, 180: true, 365: true}
+
+// retentionPresetValue derives the dropdown selection from a stored retention
+// period: the day count when it matches an offered period, "custom" for any
+// other non-zero value, or empty when retention is off.
+func retentionPresetValue(retention time.Duration) string {
+	if retention <= 0 {
+		return ""
+	}
+	days := durationDays(retention)
+	if retentionPresetOptions[days] {
+		return strconv.Itoa(days)
+	}
+	return retentionPresetCustom
 }
 
 // cutoffWindowValue derives the "published within" dropdown selection from a
@@ -113,6 +137,7 @@ func readFormValues(r *http.Request) sourceFormValues {
 		TitleFilter:     r.PostFormValue(fieldTitleFilter),
 		ShortsRule:      r.PostFormValue(fieldShortsRule),
 		LivestreamsRule: r.PostFormValue(fieldLivestreamsRule),
+		RetentionPreset: r.PostFormValue(fieldRetentionPreset),
 		RetentionDays:   r.PostFormValue(fieldRetentionDays),
 	}
 }
@@ -132,7 +157,7 @@ func (v sourceFormValues) toInput() (library.AddSourceInput, error) {
 	builder.setTitleFilter(v.TitleFilter)
 	builder.setShortsRule(v.ShortsRule)
 	builder.setLivestreamsRule(v.LivestreamsRule)
-	builder.setRetention(v.RetentionDays)
+	builder.setRetention(v.RetentionPreset, v.RetentionDays)
 	return builder.input, builder.err
 }
 
@@ -292,14 +317,29 @@ func (b *inputBuilder) setLivestreamsRule(value string) {
 	b.input.LivestreamsRule = rule
 }
 
-func (b *inputBuilder) setRetention(value string) {
+// retentionPresetCustom is the dropdown value that means "use the typed number
+// of days" rather than one of the offered periods.
+const retentionPresetCustom = "custom"
+
+// setRetention interprets the "delete downloads older than" dropdown, mirroring
+// how the cutoff dropdown works: a positive number selects that many days,
+// "custom" takes the typed value, and empty means keep everything.
+func (b *inputBuilder) setRetention(preset, days string) {
 	if b.err != nil {
 		return
 	}
-	days := atoiOrZero(value)
-	if days < 0 {
+	value := preset
+	if strings.TrimSpace(preset) == retentionPresetCustom {
+		value = days
+	}
+	if strings.TrimSpace(value) == "" {
+		return
+	}
+
+	parsed := atoiOrZero(value)
+	if parsed < 0 {
 		b.err = errors.New("Retention days can't be negative.")
 		return
 	}
-	b.input.RetentionAfter = time.Duration(days) * hoursPerDayDuration
+	b.input.RetentionAfter = time.Duration(parsed) * hoursPerDayDuration
 }

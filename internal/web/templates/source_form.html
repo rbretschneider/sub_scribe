@@ -99,9 +99,14 @@
     <p class="field-hint">A rolling window — "the last year" always means the trailing 12 months, so newer uploads keep coming and older ones stay skipped.</p>
   </div>
 
-  <div class="field" data-cutoff-date{{if ne .Values.CutoffWindow "custom"}} hidden{{end}}>
+  <div class="field" data-cutoff-date{{if eq .Values.CutoffWindow ""}} hidden{{end}}>
     <label for="download_cutoff">Published on or after</label>
-    <input id="download_cutoff" name="download_cutoff" type="date" value="{{.Values.DownloadCutoff}}">
+    <input id="download_cutoff" name="download_cutoff" type="date" value="{{.Values.DownloadCutoff}}"
+           {{if ne .Values.CutoffWindow "custom"}}readonly{{end}}>
+    <p class="field-hint" data-cutoff-rolling{{if eq .Values.CutoffWindow "custom"}} hidden{{end}}>
+      Where that window falls today. It is rolling, so it moves forward each day —
+      pick "Since a specific date…" above to pin it.
+    </p>
   </div>
 
   <div class="field">
@@ -111,9 +116,24 @@
   </div>
 
   <div class="field">
-    <label for="retention_days">Delete downloads older than <span class="optional">(optional, days)</span></label>
+    <label for="retention_preset">Delete downloads older than</label>
+    <select id="retention_preset" name="retention_preset" data-retention-select>
+      <option value="" {{selected .Values.RetentionPreset ""}}>Never — keep everything</option>
+      <option value="30" {{selected .Values.RetentionPreset "30"}}>30 days</option>
+      <option value="60" {{selected .Values.RetentionPreset "60"}}>60 days</option>
+      <option value="90" {{selected .Values.RetentionPreset "90"}}>90 days</option>
+      <option value="180" {{selected .Values.RetentionPreset "180"}}>6 months</option>
+      <option value="365" {{selected .Values.RetentionPreset "365"}}>1 year</option>
+      <option value="custom" {{selected .Values.RetentionPreset "custom"}}>A specific number of days…</option>
+    </select>
+    <p class="field-hint">Downloaded files past this age are deleted from disk to keep
+      the library from growing without limit. The videos stay listed as skipped.</p>
+  </div>
+
+  <div class="field" data-retention-days{{if ne .Values.RetentionPreset "custom"}} hidden{{end}}>
+    <label for="retention_days">Days to keep</label>
     <input id="retention_days" name="retention_days" type="number" min="0" inputmode="numeric"
-           value="{{.Values.RetentionDays}}" placeholder="0 = keep forever">
+           value="{{.Values.RetentionDays}}" placeholder="e.g. 45">
   </div>
 
   <div class="form-actions">

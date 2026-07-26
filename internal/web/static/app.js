@@ -9,6 +9,7 @@
     initTheme();
     initDropzone();
     initCutoff();
+    initRetention();
     initEvents();
     initLiveRefresh();
     initDeleteConfirm();
@@ -128,17 +129,69 @@
     }
   }
 
-  // initCutoff reveals the custom-date field only when "Since a specific date" is
-  // chosen in the "published within" dropdown. Without JS the server renders the
-  // date field's initial visibility, so the form still works.
+  // initCutoff keeps the date field in step with the "published within"
+  // dropdown. Choosing a period fills in and shows the date that period works
+  // out to today — read-only, because the window is rolling and re-resolved on
+  // every scan — while "Since a specific date" makes it editable and pins it.
+  // Without JS the server renders the field's initial state, so the form still
+  // works; only the live preview is lost.
   function initCutoff() {
     var select = document.querySelector("[data-cutoff-select]");
     var dateField = document.querySelector("[data-cutoff-date]");
     if (!select || !dateField) {
       return;
     }
+    var input = dateField.querySelector("input[type=date]");
+    var rollingNote = dateField.querySelector("[data-cutoff-rolling]");
+    // What the date was when the page loaded, so switching to "specific date"
+    // and back does not lose a value the user had already pinned.
+    var pinned = input ? input.value : "";
+
     function sync() {
-      dateField.hidden = select.value !== "custom";
+      var isCustom = select.value === "custom";
+      var days = Number(select.value);
+
+      dateField.hidden = select.value === "";
+      if (rollingNote) { rollingNote.hidden = isCustom; }
+      if (!input) { return; }
+
+      input.readOnly = !isCustom;
+      if (isCustom) {
+        input.value = pinned;
+      } else if (days > 0) {
+        input.value = daysAgo(days);
+      }
+    }
+
+    if (input) {
+      input.addEventListener("change", function () {
+        if (select.value === "custom") { pinned = input.value; }
+      });
+    }
+    select.addEventListener("change", sync);
+    sync();
+  }
+
+  // daysAgo returns the date that many days before today as YYYY-MM-DD, which is
+  // the format a date input expects.
+  function daysAgo(days) {
+    var date = new Date();
+    date.setDate(date.getDate() - days);
+    var month = String(date.getMonth() + 1).padStart(2, "0");
+    var day = String(date.getDate()).padStart(2, "0");
+    return date.getFullYear() + "-" + month + "-" + day;
+  }
+
+  // initRetention reveals the day-count box only when "a specific number of days"
+  // is chosen, mirroring how the cutoff dropdown behaves so the two read the same.
+  function initRetention() {
+    var select = document.querySelector("[data-retention-select]");
+    var daysField = document.querySelector("[data-retention-days]");
+    if (!select || !daysField) {
+      return;
+    }
+    function sync() {
+      daysField.hidden = select.value !== "custom";
     }
     select.addEventListener("change", sync);
     sync();
