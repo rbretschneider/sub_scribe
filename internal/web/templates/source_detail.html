@@ -26,6 +26,10 @@
 {{end}}
 
 <dl class="detail-grid">
+  <dt>On disk</dt>
+  <dd><b>{{bytes .Stats.Bytes}}</b> across
+    <a href="/library?source={{.Source.ID}}&amp;status=downloaded">{{.Stats.Files}} file{{if ne .Stats.Files 1}}s{{end}}</a></dd>
+
   <dt>URL</dt>
   <dd><a href="{{.Source.URL}}" rel="noreferrer">{{.Source.URL}}</a></dd>
 

@@ -636,7 +636,7 @@ func (s *Service) DownloadMedia(ctx context.Context, mediaID int64) error {
 	if err := s.deps.Media.SetStatus(ctx, mediaID, domain.MediaDownloading, now); err != nil {
 		return fmt.Errorf("set downloading: %w", err)
 	}
-	s.publishProgress(mediaID, 0)
+	s.publishProgress(media, 0)
 
 	media, err = s.ensureMetadata(ctx, source, media, now)
 	if err != nil {
@@ -670,7 +670,7 @@ func (s *Service) DownloadMedia(ctx context.Context, mediaID int64) error {
 	opts := s.downloadOptions(profile, source, relative)
 	opts.DateAfter = cutoffDateArg(source.EffectiveCutoff(now))
 	res, err := s.deps.Runner.Download(ctx, mediaURLFor(source, media), opts, func(percent float64) {
-		s.publishProgress(mediaID, percent)
+		s.publishProgress(media, percent)
 	})
 	if errors.Is(err, ytdlp.ErrFilteredOut) {
 		return s.markSkipped(ctx, mediaID, media, now)
@@ -876,11 +876,15 @@ func (s *Service) finalizeDownload(ctx context.Context, source domain.Source, me
 }
 
 // publishProgress emits a media-progress event with the given percentage.
-func (s *Service) publishProgress(mediaID int64, percent float64) {
+//
+// Both ids travel with it: the item being downloaded is identified by its media
+// id, while the source id lets a listener that groups by channel react too.
+func (s *Service) publishProgress(media domain.Media, percent float64) {
 	s.deps.Events.Publish(events.Event{
-		Kind:    events.KindMediaProgress,
-		MediaID: mediaID,
-		Percent: percent,
+		Kind:     events.KindMediaProgress,
+		MediaID:  media.ID,
+		SourceID: media.SourceID,
+		Percent:  percent,
 	})
 }
 

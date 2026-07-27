@@ -2,6 +2,8 @@ package events
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -120,13 +122,23 @@ func writeStreamHeaders(w http.ResponseWriter) {
 
 // writeComment writes an SSE comment line (ignored by clients), used as a
 // heartbeat to keep the connection alive and detect a departed client.
-func writeComment(w http.ResponseWriter) bool {
+func writeComment(w io.Writer) bool {
 	_, err := w.Write([]byte(": ping\n\n"))
 	return err == nil
 }
 
-// writeEvent writes one SSE "data:" frame, reporting whether the write succeeded.
-func writeEvent(w http.ResponseWriter, payload []byte) bool {
+// writeEvent writes one SSE frame, reporting whether the write succeeded.
+//
+// The frame carries an "event:" line naming the kind, so a client can subscribe
+// to just the events it cares about with addEventListener. Without it every
+// frame arrives as the default "message" type and named listeners never fire at
+// all.
+func writeEvent(w io.Writer, payload []byte) bool {
+	if kind := kindOf(payload); kind != "" {
+		if _, err := fmt.Fprintf(w, "event: %s\n", kind); err != nil {
+			return false
+		}
+	}
 	if _, err := w.Write([]byte("data: ")); err != nil {
 		return false
 	}
@@ -135,6 +147,19 @@ func writeEvent(w http.ResponseWriter, payload []byte) bool {
 	}
 	_, err := w.Write([]byte("\n\n"))
 	return err == nil
+}
+
+// kindOf reads the event kind back out of an already-marshalled payload, so the
+// frame's name and body cannot disagree. An unreadable payload simply goes out
+// unnamed rather than failing the stream.
+func kindOf(payload []byte) string {
+	var envelope struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return ""
+	}
+	return envelope.Kind
 }
 
 var _ Publisher = (*Hub)(nil)

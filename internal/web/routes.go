@@ -101,6 +101,7 @@ func templateFuncs() template.FuncMap {
 		"jobStatusLabel": jobStatusLabel,
 		"jobTypeLabel":   jobTypeLabel,
 		"cutoffWindow":   cutoffWindowLabel,
+		"percentOf":      percentOf,
 		"clock":          durationClock,
 		"bytes":          bytesHuman,
 		"statusClass":    statusClass,

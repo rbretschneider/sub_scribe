@@ -203,6 +203,23 @@ func cutoffWindowLabel(window time.Duration) string {
 	return fmt.Sprintf("The last %d days", days)
 }
 
+// percentOf returns value as a whole percentage of total, clamped to 0..100 and
+// with a visible floor so a small-but-nonzero source still shows a sliver rather
+// than an empty bar. A zero total yields zero.
+func percentOf(value, total int64) int {
+	if total <= 0 || value <= 0 {
+		return 0
+	}
+	percent := int(value * 100 / total)
+	if percent < 2 {
+		return 2
+	}
+	if percent > 100 {
+		return 100
+	}
+	return percent
+}
+
 // jobTypeLabel renders a task type as readable words, e.g. "Download Media".
 func jobTypeLabel(taskType jobs.TaskType) string {
 	return humanizeEnum(string(taskType))

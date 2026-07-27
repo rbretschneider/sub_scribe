@@ -1,5 +1,6 @@
 {{define "title"}}Dashboard{{end}}
 {{define "content"}}
+<div data-live="4000">
 <div class="page-head">
   <div>
     <div class="eyebrow">Overview</div>
@@ -40,12 +41,14 @@
       </div>
       <div class="panel panel-scroll">
         {{range .NowDownloading}}
-        <div class="dl" data-source="{{.Media.SourceID}}">
+        <!-- Keyed by media id, not source id: two videos from one channel would
+             otherwise share a progress bar. -->
+        <div class="dl" data-media="{{.Media.ID}}">
           <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
           <div>
-            <div class="dl-title">{{.Media.Metadata.Title}}</div>
+            <div class="dl-title"><a href="/library/{{.Media.ID}}">{{.Media.Metadata.Title}}</a></div>
             <div class="dl-meta">{{.SourceName}}</div>
-            <div class="dl-prog indet"><i data-progress="{{.Media.SourceID}}"></i></div>
+            <div class="dl-prog indet"><i data-progress="{{.Media.ID}}"></i></div>
           </div>
           <span class="status downloading"><span class="d"></span>Downloading</span>
         </div>
@@ -91,5 +94,6 @@
       {{end}}
     </div>
   </div>
+</div>
 </div>
 {{end}}

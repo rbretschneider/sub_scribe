@@ -21,13 +21,17 @@ const (
 
 // Event is a single UI notification. Fields are optional and interpreted per
 // Kind; Percent is meaningful only for progress events. Events carry no secrets.
+// The JSON names are part of the contract with the browser script, so they are
+// spelled explicitly rather than left to Go's exported-field defaults — which
+// would emit "SourceID" while the script looks for "source", and silently never
+// match.
 type Event struct {
-	Kind     Kind
-	SourceID int64
-	MediaID  int64
-	Title    string
-	Message  string
-	Percent  float64
+	Kind     Kind    `json:"kind"`
+	SourceID int64   `json:"source"`
+	MediaID  int64   `json:"media"`
+	Title    string  `json:"title,omitempty"`
+	Message  string  `json:"message,omitempty"`
+	Percent  float64 `json:"percent"`
 }
 
 // Publisher accepts events for delivery to connected clients. Publish must be

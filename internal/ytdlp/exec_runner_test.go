@@ -30,9 +30,9 @@ func TestScanIndexEntries(t *testing.T) {
 func TestScanDownloadOutput(t *testing.T) {
 	output := strings.Join([]string{
 		"[youtube] extracting",
-		"download:10.0%",
-		"download:55.5%",
-		"download:100.0%",
+		progressLinePrefix + "10.0%",
+		progressLinePrefix + "55.5%",
+		progressLinePrefix + "100.0%",
 		"" + afterMovePrintPrefix + "/media/final.mp4",
 	}, "\n")
 

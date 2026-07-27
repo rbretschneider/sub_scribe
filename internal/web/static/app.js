@@ -292,14 +292,22 @@
       return;
     }
     var stream = new EventSource(path);
-    stream.addEventListener("progress", function (event) {
+    // These names are the server's event kinds verbatim (see events.Kind). A
+    // named SSE frame does NOT fall through to onmessage, so listening for an
+    // invented name like "progress" means hearing nothing at all — which is
+    // exactly why the download panel's bars never moved.
+    stream.addEventListener("media_progress", function (event) {
       applyProgress(event.data);
     });
-    stream.addEventListener("activity", function (event) {
-      logActivity(event.data);
-    });
+    ["media_completed", "media_failed", "source_indexed", "token_changed"].forEach(
+      function (kind) {
+        stream.addEventListener(kind, function (event) {
+          logActivity(describeEvent(event.data));
+        });
+      }
+    );
     stream.onmessage = function (event) {
-      logActivity(event.data);
+      logActivity(describeEvent(event.data));
     };
     // The browser auto-reconnects on error; no manual retry loop needed.
 
@@ -316,20 +324,47 @@
   // the matching progress bar. Malformed payloads are ignored, never thrown.
   function applyProgress(raw) {
     var data = safeParse(raw);
-    if (!data || data.source === undefined) {
+    if (!data || !data.media) {
       return;
     }
-    var bar = document.querySelector('[data-progress="' + data.source + '"]');
+    var bar = document.querySelector('[data-progress="' + data.media + '"]');
     if (!bar) {
-      return;
+      return; // that item is not on this page; the periodic refresh will add it
     }
-    var wrap = document.querySelector('[data-source="' + data.source + '"]');
+    var wrap = document.querySelector('[data-media="' + data.media + '"]');
     if (wrap) {
       wrap.hidden = false;
     }
-    var percent = Number(data.percent) || 0;
-    bar.value = percent;
-    bar.textContent = percent + "%";
+    // The bar is a plain element whose width is the progress, so it is styled
+    // rather than assigned a value. Any real reading also ends the indeterminate
+    // animation the row starts out with.
+    var percent = Math.max(0, Math.min(100, Number(data.percent) || 0));
+    bar.style.width = percent + "%";
+    if (bar.parentElement) {
+      bar.parentElement.classList.remove("indet");
+      bar.parentElement.setAttribute("aria-valuenow", String(Math.round(percent)));
+    }
+  }
+
+  // describeEvent turns an event payload into a line worth reading. The raw JSON
+  // was previously dropped into the activity log as-is, which told the user
+  // nothing they could act on.
+  function describeEvent(raw) {
+    var data = safeParse(raw);
+    if (!data) {
+      return "";
+    }
+    var label = data.title || data.message || "";
+    var prefix = {
+      media_completed: "Archived",
+      media_failed: "Failed",
+      source_indexed: "Scanned",
+      token_changed: "Cookies"
+    }[data.kind];
+    if (!prefix) {
+      return label;
+    }
+    return label ? prefix + ": " + label : prefix;
   }
 
   function logActivity(text) {

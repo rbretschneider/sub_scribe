@@ -14,8 +14,15 @@ const uploadDateLayout = "20060102"
 // shortsPathSegment marks a URL as a YouTube Short.
 const shortsPathSegment = "/shorts/"
 
-// progressLinePrefix is emitted by the download progress template.
-const progressLinePrefix = "download:"
+// progressLinePrefix is a marker of our own, embedded in the progress template
+// so percentage lines can be told apart from yt-dlp's ordinary chatter.
+//
+// The same trap as afterMovePrintPrefix: in --progress-template the text before
+// the colon selects *which* progress to report, it is not printed. The old
+// template "download:%(progress._percent_str)s" emitted a bare "  12.3%", so
+// matching on a "download:" prefix found nothing and no progress was ever
+// reported for any download.
+const progressLinePrefix = "subscribe-progress:"
 
 // afterMovePrintPrefix is a marker of our own, embedded in the --print template
 // so the final path can be picked out of yt-dlp's stdout unambiguously.
@@ -49,10 +56,14 @@ const (
 	flagConvertThumbnails = "--convert-thumbnails"
 	// thumbnailFormat is what media servers expect a sidecar image to be, and
 	// converting also normalises YouTube's .webp originals to one extension.
-	thumbnailFormat      = "jpg"
-	flagEmbedSubs        = "--embed-subs"
-	flagSubLangs         = "--sub-langs"
-	flagNewline          = "--newline"
+	thumbnailFormat = "jpg"
+	flagEmbedSubs   = "--embed-subs"
+	flagSubLangs    = "--sub-langs"
+	flagNewline     = "--newline"
+	// flagForceProgress is required because --print puts yt-dlp into quiet mode,
+	// which otherwise silences progress entirely — the template is honoured but
+	// nothing is ever emitted to parse.
+	flagForceProgress    = "--progress"
 	flagProgressTemplate = "--progress-template"
 	flagPrint            = "--print"
 	flagExtractorArgs    = "--extractor-args"
@@ -63,12 +74,13 @@ const (
 	// flagBreakOnReject stops the scan at the first item outside the date window,
 	// and flagLazyPlaylist makes entries stream out as they are found so that stop
 	// actually saves the rest of the walk.
-	flagBreakOnReject     = "--break-on-reject"
-	flagLazyPlaylist      = "--lazy-playlist"
-	tempPathPrefix        = "temp:"
-	homePathPrefix        = "home:"
-	outputExtTemplate     = ".%(ext)s"
-	progressTemplateValue = "download:%(progress._percent_str)s"
+	flagBreakOnReject = "--break-on-reject"
+	flagLazyPlaylist  = "--lazy-playlist"
+	tempPathPrefix    = "temp:"
+	homePathPrefix    = "home:"
+	outputExtTemplate = ".%(ext)s"
+	// progressTemplateValue reports download progress tagged with our marker.
+	progressTemplateValue = "download:" + progressLinePrefix + "%(progress._percent_str)s"
 	// afterMovePrintValue prints the finished file's path, tagged with our marker,
 	// once yt-dlp has moved it into place.
 	afterMovePrintValue = "after_move:" + afterMovePrintPrefix + "%(filepath)s"
@@ -258,6 +270,7 @@ func appendEmbedFlags(args []string, opts DownloadOptions) []string {
 func appendProgressFlags(args []string) []string {
 	return append(args,
 		flagNewline,
+		flagForceProgress,
 		flagProgressTemplate, progressTemplateValue,
 		flagPrint, afterMovePrintValue,
 	)

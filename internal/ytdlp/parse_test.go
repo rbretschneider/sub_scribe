@@ -130,7 +130,8 @@ func TestBuildDownloadArgs(t *testing.T) {
 	const out = "/media/out"
 	progressTail := []string{
 		"--newline",
-		"--progress-template", "download:%(progress._percent_str)s",
+		"--progress",
+		"--progress-template", progressTemplateValue,
 		"--print", "after_move:" + afterMovePrintPrefix + "%(filepath)s",
 	}
 
@@ -241,12 +242,18 @@ func TestParseProgressPercent(t *testing.T) {
 		want   float64
 		wantOK bool
 	}{
-		{name: "simple percent", line: "download:42.5%", want: 42.5, wantOK: true},
-		{name: "padded whitespace", line: "download:  7.0%  ", want: 7.0, wantOK: true},
-		{name: "hundred percent", line: "download:100.0%", want: 100.0, wantOK: true},
-		{name: "not a progress line", line: "after_move:/x/y.mp4", wantOK: false},
-		{name: "unparseable value", line: "download:N/A%", wantOK: false},
+		// yt-dlp emits these tagged with our own marker; the "download:" in the
+		// template selects which progress to report and is never printed.
+		{name: "simple percent", line: progressLinePrefix + "42.5%", want: 42.5, wantOK: true},
+		{name: "padded whitespace", line: progressLinePrefix + "  7.0%  ", want: 7.0, wantOK: true},
+		{name: "hundred percent", line: progressLinePrefix + "100.0%", want: 100.0, wantOK: true},
+		{name: "not a progress line", line: afterMovePrintPrefix + "/x/y.mp4", wantOK: false},
+		{name: "unparseable value", line: progressLinePrefix + "N/A%", wantOK: false},
 		{name: "blank", line: "", wantOK: false},
+		// The bare percentage yt-dlp produced under the old template must not be
+		// mistaken for a tagged line, and a "download:" prefix is not one either.
+		{name: "untagged percentage from the old template", line: "  42.5%", wantOK: false},
+		{name: "a literal download: prefix is not our marker", line: "download:42.5%", wantOK: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -283,9 +290,13 @@ func TestParseAfterMovePath(t *testing.T) {
 // download and every completed download was recorded as skipped. Pinning the
 // real output shape here is what stops that from returning.
 func TestScanDownloadOutputOnRealYtDlpOutput(t *testing.T) {
-	const captured = "download:   0.0%\n" +
-		"download:  45.3%\n" +
-		"download: 100.0%\n" +
+	// Captured from a real run: yt-dlp interleaves its own bracketed chatter with
+	// the tagged lines this package asks for.
+	const captured = "[youtube] Extracting URL: https://www.youtube.com/watch?v=2Q6OvYjOJi0\n" +
+		progressLinePrefix + "   0.0%\n" +
+		progressLinePrefix + "  45.3%\n" +
+		"[Merger] Merging formats into \"GPS Hidden Messages.mkv\"\n" +
+		progressLinePrefix + " 100.0%\n" +
 		afterMovePrintPrefix + "/media/Computerphile/Season 2026/GPS Hidden Messages [2Q6OvYjOJi0].mkv\n"
 
 	var percents []float64

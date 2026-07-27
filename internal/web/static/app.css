@@ -400,3 +400,14 @@ a.stat:hover .stat-num { color: var(--accent); }
   .icon-btn { width: 44px; height: 44px; }
   .field input, .field select, .field textarea { font-size: 16px; }
 }
+
+/* ---- Per-source disk usage ---- */
+.card-usage { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; min-width: 120px; flex: none; }
+.usage-size { font-family: var(--mono); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.usage-count { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.usage-bar { display: block; width: 110px; height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; margin-top: 3px; }
+.usage-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+@media (max-width: 560px) {
+  .card-usage { align-items: flex-start; }
+  .usage-bar { width: 100%; }
+}

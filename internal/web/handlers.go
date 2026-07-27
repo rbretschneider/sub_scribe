@@ -134,6 +134,10 @@ type sourcesView struct {
 	baseView
 	Sources []domain.Source
 	Stats   map[int64]library.SourceStats
+	// LargestBytes is the biggest source's size, used to scale the usage bars so
+	// the heaviest source is obvious without comparing numbers. Zero when nothing
+	// has been downloaded yet, which hides the bars entirely.
+	LargestBytes int64
 }
 
 // handleSources lists the tracked sources for management (edit, delete, add).
@@ -149,11 +153,24 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := sourcesView{
-		baseView: s.newBaseView("Sources", navSources),
-		Sources:  sources,
-		Stats:    stats,
+		baseView:     s.newBaseView("Sources", navSources),
+		Sources:      sources,
+		Stats:        stats,
+		LargestBytes: largestSourceBytes(stats),
 	}
 	s.render(w, "sources", http.StatusOK, view)
+}
+
+// largestSourceBytes returns the size of the biggest source, or zero when
+// nothing has been downloaded.
+func largestSourceBytes(stats map[int64]library.SourceStats) int64 {
+	var largest int64
+	for _, entry := range stats {
+		if entry.Bytes > largest {
+			largest = entry.Bytes
+		}
+	}
+	return largest
 }
 
 // sourceFormView is the render model for the source form, carrying the profile

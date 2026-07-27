@@ -12,6 +12,7 @@
 {{if .Sources}}
 <ul class="card-list">
   {{range .Sources}}
+  {{$stats := index $.Stats .ID}}
   <li class="card-row">
     <div>
       <h2><a href="/sources/{{.ID}}">{{if .Name}}{{.Name}}{{else}}Fetching name…{{end}}</a></h2>
@@ -21,6 +22,17 @@
         <span class="tag">every {{hoursOf .IndexFrequency}}h</span>
       </div>
     </div>
+    <div class="card-usage">
+      <span class="usage-size">{{bytes $stats.Bytes}}</span>
+      <span class="usage-count">{{$stats.Files}} video{{if ne $stats.Files 1}}s{{end}}</span>
+      {{if $.LargestBytes}}
+      <!-- Bar widths are relative to the biggest source, so the heaviest one is
+           obvious at a glance rather than needing the numbers compared. -->
+      <span class="usage-bar" aria-hidden="true">
+        <i style="width: {{percentOf $stats.Bytes $.LargestBytes}}%"></i>
+      </span>
+      {{end}}
+    </div>
     <div class="card-actions">
       <form method="post" action="/sources/{{.ID}}/enabled">
         <input type="hidden" name="enabled" value="{{if .Enabled}}false{{else}}true{{end}}">
@@ -28,7 +40,6 @@
         <button class="btn btn-ghost" type="submit">{{if .Enabled}}Pause{{else}}Resume{{end}}</button>
       </form>
       <a class="btn btn-secondary" href="/sources/{{.ID}}/edit">Edit</a>
-      {{$stats := index $.Stats .ID}}
       <form method="post" action="/sources/{{.ID}}/delete" data-confirm-delete
             data-source-name="{{if .Name}}{{.Name}}{{else}}this source{{end}}"
             data-file-count="{{$stats.Files}}" data-file-size="{{bytes $stats.Bytes}}">
