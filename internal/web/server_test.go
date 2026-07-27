@@ -39,6 +39,7 @@ type fakeSources struct {
 	getErr      error
 	deleted     []int64
 	scanned     []int64
+	renamed     []int64
 	updateCalls int
 	updatedID   int64
 	updated     library.AddSourceInput
@@ -87,6 +88,11 @@ func (f *fakeSources) DeleteSource(_ context.Context, id int64, opts library.Del
 
 func (f *fakeSources) RequestScan(_ context.Context, id int64) error {
 	f.scanned = append(f.scanned, id)
+	return nil
+}
+
+func (f *fakeSources) RequestRename(_ context.Context, id int64) error {
+	f.renamed = append(f.renamed, id)
 	return nil
 }
 

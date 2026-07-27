@@ -8,6 +8,7 @@ package tasks
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"sub_scribe/internal/jobs"
 	"sub_scribe/internal/library"
@@ -22,6 +23,7 @@ type Deps struct {
 	Retainer     library.Retainer
 	Redownloader library.Redownloader
 	JobPruner    library.JobPruner
+	Renamer      library.Renamer
 }
 
 // IndexHandler returns a handler that indexes the task's source. The task must
@@ -76,5 +78,23 @@ func PruneJobsHandler(pruner library.JobPruner) jobs.HandlerFunc {
 	return func(ctx context.Context, _ jobs.Task) error {
 		_, err := pruner.PruneJobs(ctx)
 		return err
+	}
+}
+
+// RenameHandler returns a handler that brings the task's source into line with
+// its naming template. The task must carry a SourceID.
+func RenameHandler(renamer library.Renamer) jobs.HandlerFunc {
+	return func(ctx context.Context, task jobs.Task) error {
+		if task.SourceID == nil {
+			return fmt.Errorf("rename task %d: missing source id", task.ID)
+		}
+		report, err := renamer.ApplyNamingTemplate(ctx, *task.SourceID)
+		if err != nil {
+			return err
+		}
+		slog.InfoContext(ctx, "applied the naming template to existing files",
+			"source_id", *task.SourceID,
+			"checked", report.Checked, "renamed", report.Renamed, "blocked", report.Blocked)
+		return nil
 	}
 }

@@ -348,6 +348,21 @@ func (s *Server) handleSourceScan(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, fmt.Sprintf("/sources/%d", id))
 }
 
+// handleSourceRename brings a source's existing files into line with its current
+// naming template and returns to its detail page. The work runs in the
+// background, so the redirect is immediate and progress shows on the Jobs page.
+func (s *Server) handleSourceRename(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	if err := s.deps.Sources.RequestRename(r.Context(), id); err != nil {
+		http.Error(w, "could not start renaming", http.StatusInternalServerError)
+		return
+	}
+	redirect(w, r, fmt.Sprintf("/sources/%d", id))
+}
+
 // enabledFormField carries the desired state for the pause/resume control.
 const enabledFormField = "enabled"
 

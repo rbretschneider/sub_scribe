@@ -256,6 +256,7 @@ func serve(cfg config.Config, db *store.DB, svc *library.Service, clock jobs.Clo
 		Retainer:     svc,
 		Redownloader: svc,
 		JobPruner:    svc,
+		Renamer:      svc,
 	})
 	pool := jobs.NewPool(db.Tasks(), registry, clock, jobs.PoolConfig{
 		Workers:    cfg.Workers,

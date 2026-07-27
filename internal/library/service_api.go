@@ -26,6 +26,9 @@ type SourceService interface {
 	SetSourceEnabled(ctx context.Context, id int64, enabled bool) error
 	// RequestScan enqueues an immediate index of the source, out of schedule.
 	RequestScan(ctx context.Context, id int64) error
+	// RequestRename enqueues a pass that moves the source's existing files to the
+	// paths its naming template currently describes.
+	RequestRename(ctx context.Context, id int64) error
 }
 
 // DeleteSourceOptions controls how much of a source is removed. The zero value
@@ -82,6 +85,12 @@ type Redownloader interface {
 // how many were removed. Invoked by the prune task handler.
 type JobPruner interface {
 	PruneJobs(ctx context.Context) (int, error)
+}
+
+// Renamer brings a source's existing files into line with its current naming
+// template. Invoked by the rename task handler.
+type Renamer interface {
+	ApplyNamingTemplate(ctx context.Context, sourceID int64) (RenameReport, error)
 }
 
 // MediaListItem pairs a media item with its source's display name, for the

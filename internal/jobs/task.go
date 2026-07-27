@@ -26,6 +26,10 @@ const (
 	// TaskPruneJobs removes finished queue entries past their retention window, so
 	// the queue history stays a useful record rather than an unbounded log.
 	TaskPruneJobs TaskType = "prune_jobs"
+	// TaskRenameFiles moves a source's existing files to the layout its naming
+	// template currently describes, for a library left split across two layouts
+	// by a template change.
+	TaskRenameFiles TaskType = "rename_files"
 )
 
 // TaskStatus is the lifecycle state of a queued task.

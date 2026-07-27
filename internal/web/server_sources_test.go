@@ -192,3 +192,22 @@ func TestSourceDetailExplainsAPausedSource(t *testing.T) {
 		t.Error("a paused source should say what being paused means")
 	}
 }
+
+func TestSourceRenameEnqueuesAndRedirects(t *testing.T) {
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Chan", URL: "https://example.com/@chan"}}
+	server := newTestServer(t, sources, &fakeProfiles{}, "")
+
+	req := httptest.NewRequest(http.MethodPost, "/sources/7/rename", nil)
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/sources/7" {
+		t.Errorf("Location = %q, want /sources/7", location)
+	}
+	if len(sources.renamed) != 1 || sources.renamed[0] != 7 {
+		t.Errorf("renamed = %v, want [7]", sources.renamed)
+	}
+}

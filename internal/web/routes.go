@@ -26,6 +26,7 @@ const (
 	routeSourceEdit    = "GET /sources/{id}/edit"
 	routeSourceUpdate  = "POST /sources/{id}"
 	routeSourceScan    = "POST /sources/{id}/scan"
+	routeSourceRename  = "POST /sources/{id}/rename"
 	routeSourceEnabled = "POST /sources/{id}/enabled"
 	routeSourceDelete  = "POST /sources/{id}/delete"
 	routeProfiles      = "GET /profiles"
@@ -74,6 +75,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc(routeSourceEdit, s.handleSourceEdit)
 	s.mux.HandleFunc(routeSourceUpdate, s.handleSourceUpdate)
 	s.mux.HandleFunc(routeSourceScan, s.handleSourceScan)
+	s.mux.HandleFunc(routeSourceRename, s.handleSourceRename)
 	s.mux.HandleFunc(routeSourceEnabled, s.handleSourceEnabled)
 	s.mux.HandleFunc(routeSourceDelete, s.handleSourceDelete)
 	s.mux.HandleFunc(routeProfiles, s.handleProfiles)
