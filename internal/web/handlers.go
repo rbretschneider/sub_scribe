@@ -267,6 +267,13 @@ func (s *Server) renderSourceForm(w http.ResponseWriter, ctx context.Context, op
 		http.Error(w, "could not load profiles", http.StatusInternalServerError)
 		return
 	}
+	// Preselect the first profile on a blank form. There is always at least one
+	// (seeded on first run) and it is already set up for media servers, so an
+	// empty "choose a profile" placeholder only invites a validation error.
+	if opts.Values.MediaProfileID == "" && len(profiles) > 0 {
+		opts.Values.MediaProfileID = strconv.FormatInt(profiles[0].ID, 10)
+	}
+
 	view := sourceFormView{
 		baseView:    s.newBaseView(opts.Heading, navSources),
 		Profiles:    profiles,

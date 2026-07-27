@@ -41,11 +41,14 @@
   <div class="field">
     <label for="media_profile_id">Media profile</label>
     <select id="media_profile_id" name="media_profile_id">
-      <option value="">— choose a profile —</option>
-      {{range .Profiles}}
-      <option value="{{.ID}}" {{selected $.Values.MediaProfileID (printf "%d" .ID)}}>{{.Name}}</option>
+      {{range $index, $profile := .Profiles}}
+      <option value="{{$profile.ID}}" {{selected $.Values.MediaProfileID (printf "%d" $profile.ID)}}>
+        {{$profile.Name}}{{if eq $index 0}} (default){{end}}</option>
       {{end}}
     </select>
+    <p class="field-hint">How this source is downloaded and named. The default is
+      set up for Plex and Jellyfin already — leave it alone unless you want
+      different quality or a different folder layout.</p>
   </div>
 
   <div class="field">
@@ -86,6 +89,7 @@
 
   <div class="field">
     <label for="cutoff_window">Only download videos published within</label>
+    <div class="field-pair">
     <select id="cutoff_window" name="cutoff_window" data-cutoff-select>
       <option value="" {{selected .Values.CutoffWindow ""}}>All time — grab the whole back catalog</option>
       <option value="7" {{selected .Values.CutoffWindow "7"}}>The last 7 days</option>
@@ -94,19 +98,15 @@
       <option value="180" {{selected .Values.CutoffWindow "180"}}>The last 6 months</option>
       <option value="365" {{selected .Values.CutoffWindow "365"}}>The last year</option>
       <option value="730" {{selected .Values.CutoffWindow "730"}}>The last 2 years</option>
-      <option value="custom" {{selected .Values.CutoffWindow "custom"}}>Since a specific date…</option>
+      <option value="custom" {{selected .Values.CutoffWindow "custom"}}>Custom…</option>
     </select>
-    <p class="field-hint">A rolling window — "the last year" always means the trailing 12 months, so newer uploads keep coming and older ones stay skipped.</p>
-  </div>
-
-  <div class="field" data-cutoff-date{{if eq .Values.CutoffWindow ""}} hidden{{end}}>
-    <label for="download_cutoff">Published on or after</label>
-    <input id="download_cutoff" name="download_cutoff" type="date" value="{{.Values.DownloadCutoff}}"
+    <input id="download_cutoff" name="download_cutoff" type="date" data-cutoff-date
+           aria-label="Published on or after" value="{{.Values.DownloadCutoff}}"
            {{if ne .Values.CutoffWindow "custom"}}readonly{{end}}>
+    </div>
     <p class="field-hint" data-cutoff-rolling{{if eq .Values.CutoffWindow "custom"}} hidden{{end}}>
-      Where that window falls today. It is rolling, so it moves forward each day —
-      pick "Since a specific date…" above to pin it.
-    </p>
+      The date shows where that window falls today. It is rolling, so it moves
+      forward each day — choose <b>Custom</b> to pin a fixed date instead.</p>
   </div>
 
   <div class="field">
@@ -117,23 +117,23 @@
 
   <div class="field">
     <label for="retention_preset">Delete downloads older than</label>
-    <select id="retention_preset" name="retention_preset" data-retention-select>
-      <option value="" {{selected .Values.RetentionPreset ""}}>Never — keep everything</option>
-      <option value="30" {{selected .Values.RetentionPreset "30"}}>30 days</option>
-      <option value="60" {{selected .Values.RetentionPreset "60"}}>60 days</option>
-      <option value="90" {{selected .Values.RetentionPreset "90"}}>90 days</option>
-      <option value="180" {{selected .Values.RetentionPreset "180"}}>6 months</option>
-      <option value="365" {{selected .Values.RetentionPreset "365"}}>1 year</option>
-      <option value="custom" {{selected .Values.RetentionPreset "custom"}}>A specific number of days…</option>
-    </select>
-    <p class="field-hint">Downloaded files past this age are deleted from disk to keep
-      the library from growing without limit. The videos stay listed as skipped.</p>
-  </div>
-
-  <div class="field" data-retention-days{{if ne .Values.RetentionPreset "custom"}} hidden{{end}}>
-    <label for="retention_days">Days to keep</label>
-    <input id="retention_days" name="retention_days" type="number" min="0" inputmode="numeric"
-           value="{{.Values.RetentionDays}}" placeholder="e.g. 45">
+    <div class="field-pair">
+      <select id="retention_preset" name="retention_preset" data-retention-select>
+        <option value="" {{selected .Values.RetentionPreset ""}}>Never — keep everything</option>
+        <option value="30" {{selected .Values.RetentionPreset "30"}}>30 days</option>
+        <option value="60" {{selected .Values.RetentionPreset "60"}}>60 days</option>
+        <option value="90" {{selected .Values.RetentionPreset "90"}}>90 days</option>
+        <option value="180" {{selected .Values.RetentionPreset "180"}}>6 months</option>
+        <option value="365" {{selected .Values.RetentionPreset "365"}}>1 year</option>
+        <option value="custom" {{selected .Values.RetentionPreset "custom"}}>Custom…</option>
+      </select>
+      <input id="retention_days" name="retention_days" type="number" min="0" inputmode="numeric"
+             aria-label="Days to keep" data-retention-days
+             value="{{.Values.RetentionDays}}" placeholder="days"
+             {{if ne .Values.RetentionPreset "custom"}}readonly{{end}}>
+    </div>
+    <p class="field-hint">Downloaded files past this age are deleted from disk so the
+      library does not grow without limit. Choose <b>Custom</b> to type any number of days.</p>
   </div>
 
   <div class="form-actions">

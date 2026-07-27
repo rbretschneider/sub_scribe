@@ -114,6 +114,15 @@ func (r *fakeMediaRepo) Get(_ context.Context, id int64) (domain.Media, error) {
 	return m, nil
 }
 
+func (r *fakeMediaRepo) FindBySource(_ context.Context, sourceID int64, externalID string) (domain.Media, bool, error) {
+	for _, m := range r.items {
+		if m.SourceID == sourceID && m.ExternalID == externalID {
+			return m, true, nil
+		}
+	}
+	return domain.Media{}, false, nil
+}
+
 func (r *fakeMediaRepo) ExistsBySource(_ context.Context, sourceID int64, externalID string) (bool, error) {
 	for _, m := range r.items {
 		if m.SourceID == sourceID && m.ExternalID == externalID {

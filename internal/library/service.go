@@ -546,12 +546,12 @@ func (s *Service) indexEntry(ctx context.Context, source domain.Source, entry yt
 		return false, nil
 	}
 
-	exists, err := s.deps.Media.ExistsBySource(ctx, source.ID, entry.ExternalID)
+	existing, found, err := s.deps.Media.FindBySource(ctx, source.ID, entry.ExternalID)
 	if err != nil {
 		return false, fmt.Errorf("check existing media: %w", err)
 	}
-	if exists {
-		return false, nil
+	if found {
+		return s.reconsiderSkipped(ctx, existing, now)
 	}
 
 	media := domain.Media{
@@ -571,6 +571,33 @@ func (s *Service) indexEntry(ctx context.Context, source domain.Source, entry yt
 	if _, err := s.deps.Tasks.Enqueue(ctx, task); err != nil {
 		return false, fmt.Errorf("enqueue download task: %w", err)
 	}
+	return true, nil
+}
+
+// reconsiderSkipped re-queues an item that was previously passed over but which
+// this scan has offered again, reporting whether it queued anything.
+//
+// An item is only ever skipped because it fell outside the source's date window.
+// Reaching this point means the current scan surfaced it and it cleared the
+// source's rules, so the window must have widened — and without this, widening it
+// would appear to do nothing at all: the scan finds the videos, sees rows already
+// exist, and queues none of them. Anything downloaded, failed, or already waiting
+// is left alone.
+func (s *Service) reconsiderSkipped(ctx context.Context, media domain.Media, now time.Time) (bool, error) {
+	if media.Status != domain.MediaSkipped {
+		return false, nil
+	}
+
+	if err := s.deps.Media.SetStatus(ctx, media.ID, domain.MediaPending, now); err != nil {
+		return false, fmt.Errorf("requeue previously skipped media %d: %w", media.ID, err)
+	}
+	task := jobs.NewTask(jobs.TaskDownloadMedia, now).
+		ForSource(media.SourceID).ForMedia(media.ID)
+	if _, err := s.deps.Tasks.Enqueue(ctx, task); err != nil {
+		return false, fmt.Errorf("enqueue previously skipped media %d: %w", media.ID, err)
+	}
+	slog.InfoContext(ctx, "re-queued a video the widened window now includes",
+		"media_id", media.ID, "title", media.Metadata.Title)
 	return true, nil
 }
 

@@ -10,6 +10,7 @@
     initDropzone();
     initCutoff();
     initRetention();
+    initSponsorBlock();
     initEvents();
     initLiveRefresh();
     initDeleteConfirm();
@@ -137,12 +138,12 @@
   // works; only the live preview is lost.
   function initCutoff() {
     var select = document.querySelector("[data-cutoff-select]");
-    var dateField = document.querySelector("[data-cutoff-date]");
-    if (!select || !dateField) {
+    var input = document.querySelector("[data-cutoff-date]");
+    if (!select || !input) {
       return;
     }
-    var input = dateField.querySelector("input[type=date]");
-    var rollingNote = dateField.querySelector("[data-cutoff-rolling]");
+    var dateField = input;
+    var rollingNote = document.querySelector("[data-cutoff-rolling]");
     // What the date was when the page loaded, so switching to "specific date"
     // and back does not lose a value the user had already pinned.
     var pinned = input ? input.value : "";
@@ -182,16 +183,43 @@
     return date.getFullYear() + "-" + month + "-" + day;
   }
 
-  // initRetention reveals the day-count box only when "a specific number of days"
-  // is chosen, mirroring how the cutoff dropdown behaves so the two read the same.
+  // initRetention keeps the day count beside the dropdown filled in with whatever
+  // the chosen period works out to, editable only when "Custom" is selected. The
+  // number is a helper, not a second thing to fill in.
   function initRetention() {
     var select = document.querySelector("[data-retention-select]");
-    var daysField = document.querySelector("[data-retention-days]");
-    if (!select || !daysField) {
+    var days = document.querySelector("[data-retention-days]");
+    if (!select || !days) {
+      return;
+    }
+    var typed = days.value;
+
+    function sync() {
+      var isCustom = select.value === "custom";
+      days.readOnly = !isCustom;
+      if (isCustom) {
+        days.value = typed;
+      } else {
+        days.value = select.value; // "" for Never, otherwise the period in days
+      }
+    }
+    days.addEventListener("change", function () {
+      if (select.value === "custom") { typed = days.value; }
+    });
+    select.addEventListener("change", sync);
+    sync();
+  }
+
+  // initSponsorBlock hides the segment checkboxes when SponsorBlock is off, so
+  // the form only asks which segments once you have said you want any removed.
+  function initSponsorBlock() {
+    var select = document.querySelector("select[name=sponsorblock_mode]");
+    var categories = document.querySelector("[data-sponsorblock-categories]");
+    if (!select || !categories) {
       return;
     }
     function sync() {
-      daysField.hidden = select.value !== "custom";
+      categories.hidden = select.value === "off";
     }
     select.addEventListener("change", sync);
     sync();

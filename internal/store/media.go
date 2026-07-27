@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -71,6 +72,24 @@ func (r *MediaRepo) Get(ctx context.Context, id int64) (domain.Media, error) {
 		return domain.Media{}, fmt.Errorf("store: get media %d: %w", id, err)
 	}
 	return media, nil
+}
+
+// FindBySource returns the source's item with externalID, reporting whether one
+// exists. Indexing needs the row itself, not just its existence, so it can tell
+// a genuinely new video from one already recorded and possibly reconsiderable.
+func (r *MediaRepo) FindBySource(ctx context.Context, sourceID int64, externalID string) (domain.Media, bool, error) {
+	row := r.sql.QueryRowContext(ctx,
+		`SELECT `+mediaColumns+` FROM media WHERE source_id = ? AND external_id = ?`,
+		sourceID, externalID)
+
+	media, err := scanMedia(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Media{}, false, nil
+	}
+	if err != nil {
+		return domain.Media{}, false, fmt.Errorf("store: find media %s: %w", externalID, err)
+	}
+	return media, true, nil
 }
 
 // ExistsBySource reports whether the source already has an item with externalID.

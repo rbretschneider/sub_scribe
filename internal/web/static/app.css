@@ -230,6 +230,16 @@ a.stat:hover .stat-num { color: var(--accent); }
 .checkbox { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
 .checkbox input { width: 1.05rem; height: 1.05rem; }
 .form-actions { display: flex; gap: 10px; margin-top: 6px; }
+/* A dropdown and the value it works out to, side by side: the box is a helper
+   showing what the choice means, not a second thing to fill in. */
+.field-pair { display: grid; grid-template-columns: 1fr minmax(9ch, 14ch); gap: 8px; align-items: center; }
+.field-pair input[readonly] { color: var(--muted); background: var(--surface-3); }
+@media (max-width: 560px) { .field-pair { grid-template-columns: 1fr; } }
+/* Checkbox lists stack rather than flow, so each option and its explanation sit
+   on their own line. */
+.stack-group { flex-direction: column; gap: 10px; }
+.check-row { align-items: flex-start; gap: 10px; font-weight: 400; font-size: 14px; line-height: 1.45; }
+.check-row input { margin-top: 3px; flex: none; }
 
 /* ---- Alerts ---- */
 .alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px 15px; border-radius: var(--radius-sm); margin-bottom: 18px; border: 1px solid; }

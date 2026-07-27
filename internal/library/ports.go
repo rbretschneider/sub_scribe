@@ -28,6 +28,9 @@ type SourceRepo interface {
 type MediaRepo interface {
 	Upsert(ctx context.Context, media domain.Media) (int64, error)
 	Get(ctx context.Context, id int64) (domain.Media, error)
+	// FindBySource returns an existing item for the source, so indexing can decide
+	// whether to record a new one or reconsider one already known.
+	FindBySource(ctx context.Context, sourceID int64, externalID string) (domain.Media, bool, error)
 	ExistsBySource(ctx context.Context, sourceID int64, externalID string) (bool, error)
 	ListBySource(ctx context.Context, sourceID int64) ([]domain.Media, error)
 	ListByStatus(ctx context.Context, status domain.MediaStatus, limit int) ([]domain.Media, error)

@@ -22,6 +22,53 @@ type profileFormView struct {
 	Heading     string
 	Action      string
 	SubmitLabel string
+	// SponsorBlockCategories are the tickable segment types, each with a plain
+	// description — nobody should have to know SponsorBlock's internal category
+	// names to use the feature.
+	SponsorBlockCategories []categoryChoice
+}
+
+// categoryChoice is one tickable SponsorBlock segment type.
+type categoryChoice struct {
+	Value       string
+	Label       string
+	Description string
+	Checked     bool
+}
+
+// sponsorBlockChoices lists every SponsorBlock segment type in the order a user
+// is likely to want them, described in ordinary words.
+var sponsorBlockChoices = []categoryChoice{
+	{Value: string(domain.SponsorBlockSponsor), Label: "Sponsor",
+		Description: "paid promotions and adverts read by the creator"},
+	{Value: string(domain.SponsorBlockSelfPromo), Label: "Self-promotion",
+		Description: "plugs for their own merch, Patreon, or other channels"},
+	{Value: string(domain.SponsorBlockInteraction), Label: "Interaction reminder",
+		Description: `"like and subscribe" asides`},
+	{Value: string(domain.SponsorBlockIntro), Label: "Intro",
+		Description: "title cards and opening animations"},
+	{Value: string(domain.SponsorBlockOutro), Label: "Outro",
+		Description: "end cards and credits"},
+	{Value: string(domain.SponsorBlockPreview), Label: "Preview",
+		Description: "recaps of what is coming up later in the video"},
+	{Value: string(domain.SponsorBlockFiller), Label: "Filler",
+		Description: "tangents and jokes that add no information"},
+	{Value: string(domain.SponsorBlockMusicOfftopic), Label: "Non-music section",
+		Description: "talking in a music video"},
+}
+
+// categoryChoices marks the choices selected by the current value.
+func categoryChoices(selected string) []categoryChoice {
+	chosen := make(map[string]bool)
+	for _, value := range splitCSV(selected) {
+		chosen[value] = true
+	}
+	choices := make([]categoryChoice, 0, len(sponsorBlockChoices))
+	for _, choice := range sponsorBlockChoices {
+		choice.Checked = chosen[choice.Value]
+		choices = append(choices, choice)
+	}
+	return choices
 }
 
 // profileFormOptions configures a profile-form render as a single parameter
@@ -143,12 +190,13 @@ func (s *Server) handleProfileDelete(w http.ResponseWriter, r *http.Request) {
 // renderProfileForm renders the profile form for the configured mode.
 func (s *Server) renderProfileForm(w http.ResponseWriter, opts profileFormOptions) {
 	view := profileFormView{
-		baseView:    s.newBaseView(opts.Heading, navProfiles),
-		Error:       opts.Message,
-		Values:      opts.Values,
-		Heading:     opts.Heading,
-		Action:      opts.Action,
-		SubmitLabel: opts.SubmitLabel,
+		baseView:               s.newBaseView(opts.Heading, navProfiles),
+		Error:                  opts.Message,
+		Values:                 opts.Values,
+		Heading:                opts.Heading,
+		Action:                 opts.Action,
+		SubmitLabel:            opts.SubmitLabel,
+		SponsorBlockCategories: categoryChoices(opts.Values.SponsorBlockCategories),
 	}
 	s.render(w, "profile_form", opts.Status, view)
 }

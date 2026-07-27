@@ -28,9 +28,10 @@ const (
 	fieldPostDownloadCmd   = "post_download_command"
 )
 
-// defaultTemplateHint seeds the new-profile form with a working Plex-style layout
-// so a user starts from something valid rather than a blank field.
-const defaultTemplateHint = "{{ source_name }}/Season {{ upload_year }}/{{ title }} [{{ id }}]"
+// defaultTemplateHint seeds the new-profile form with the season/episode layout
+// media servers can actually read, so a new profile starts from something that
+// works rather than a blank field.
+const defaultTemplateHint = "{{ source_name }}/Season {{ upload_year }}/{{ season_episode }} - {{ title }}"
 
 // profileFormValues holds the raw, user-entered profile fields so the form can be
 // re-rendered exactly on a validation error (recognition over recall).
@@ -58,7 +59,7 @@ func defaultProfileFormValues() profileFormValues {
 		OutputPathTemplate: defaultTemplateHint,
 		Kind:               string(domain.MediaVideo),
 		QualityFormat:      "bestvideo[height<=1080]+bestaudio/best",
-		MetadataFormat:     string(domain.MetadataMovie),
+		MetadataFormat:     string(domain.MetadataEpisode),
 		EmbedMetadata:      true,
 		EmbedThumbnail:     true,
 		WriteThumbnail:     true,
@@ -68,19 +69,26 @@ func defaultProfileFormValues() profileFormValues {
 
 // readProfileFormValues extracts the raw submitted profile fields.
 func readProfileFormValues(r *http.Request) profileFormValues {
+	// Parsed up front so the multi-valued checkbox group can be read from
+	// PostForm directly, rather than depending on some other field being read
+	// first to trigger parsing.
+	_ = r.ParseForm()
+
 	return profileFormValues{
-		Name:                   r.PostFormValue(fieldProfileName),
-		OutputPathTemplate:     r.PostFormValue(fieldOutputTemplate),
-		Kind:                   r.PostFormValue(fieldKind),
-		QualityFormat:          r.PostFormValue(fieldQualityFormat),
-		MetadataFormat:         r.PostFormValue(fieldMetadataFormat),
-		EmbedMetadata:          isChecked(r, fieldEmbedMetadata),
-		EmbedThumbnail:         isChecked(r, fieldEmbedThumbnail),
-		WriteThumbnail:         isChecked(r, fieldWriteThumbnail),
-		EmbedSubtitles:         isChecked(r, fieldEmbedSubtitles),
-		SubtitleLanguages:      r.PostFormValue(fieldSubtitleLanguages),
-		SponsorBlockMode:       r.PostFormValue(fieldSponsorBlockMode),
-		SponsorBlockCategories: r.PostFormValue(fieldSponsorBlockCats),
+		Name:               r.PostFormValue(fieldProfileName),
+		OutputPathTemplate: r.PostFormValue(fieldOutputTemplate),
+		Kind:               r.PostFormValue(fieldKind),
+		QualityFormat:      r.PostFormValue(fieldQualityFormat),
+		MetadataFormat:     r.PostFormValue(fieldMetadataFormat),
+		EmbedMetadata:      isChecked(r, fieldEmbedMetadata),
+		EmbedThumbnail:     isChecked(r, fieldEmbedThumbnail),
+		WriteThumbnail:     isChecked(r, fieldWriteThumbnail),
+		EmbedSubtitles:     isChecked(r, fieldEmbedSubtitles),
+		SubtitleLanguages:  r.PostFormValue(fieldSubtitleLanguages),
+		SponsorBlockMode:   r.PostFormValue(fieldSponsorBlockMode),
+		// The categories are checkboxes now, so several values arrive under one
+		// name; they are kept as CSV internally to match how they are stored.
+		SponsorBlockCategories: strings.Join(r.PostForm[fieldSponsorBlockCats], ","),
 		RedownloadDays:         r.PostFormValue(fieldRedownloadDays),
 		ExtraYtdlpArgs:         r.PostFormValue(fieldExtraYtdlpArgs),
 		PostDownloadCommand:    r.PostFormValue(fieldPostDownloadCmd),
@@ -109,7 +117,7 @@ func (v profileFormValues) toProfile() (domain.MediaProfile, error) {
 	}
 	metadataFormat := domain.MetadataFormat(v.MetadataFormat)
 	if !metadataFormat.IsValid() {
-		return domain.MediaProfile{}, errors.New("Please choose a metadata layout (Plex or Jellyfin).")
+		return domain.MediaProfile{}, errors.New("Please choose a sidecar metadata layout (episode or movie).")
 	}
 	days := atoiOrZero(v.RedownloadDays)
 	if days < 0 {

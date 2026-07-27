@@ -94,11 +94,17 @@
     </select>
   </div>
 
-  <div class="field">
-    <label for="sponsorblock_categories">SponsorBlock categories <span class="optional">(optional, comma-separated)</span></label>
-    <input id="sponsorblock_categories" name="sponsorblock_categories" type="text" autocomplete="off"
-           value="{{.Values.SponsorBlockCategories}}" placeholder="sponsor, selfpromo, interaction">
-  </div>
+  <fieldset class="field-group stack-group" data-sponsorblock-categories{{if eq .Values.SponsorBlockMode "off"}} hidden{{end}}>
+    <legend>Which segments</legend>
+    {{range .SponsorBlockCategories}}
+    <label class="checkbox check-row">
+      <input type="checkbox" name="sponsorblock_categories" value="{{.Value}}" {{if .Checked}}checked{{end}}>
+      <span><b>{{.Label}}</b> — {{.Description}}</span>
+    </label>
+    {{end}}
+    <p class="field-hint">Leaving all of these unticked uses the common three:
+      sponsor, self-promotion, and interaction reminders.</p>
+  </fieldset>
 
   <div class="field">
     <label for="redownload_days">Re-download to improve quality after <span class="optional">(optional, days)</span></label>
