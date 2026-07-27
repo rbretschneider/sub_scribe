@@ -27,6 +27,15 @@ const (
 	envPort          = "SUBSCRIBE_PORT"
 	envWorkers       = "SUBSCRIBE_WORKERS"
 	envJobRetention  = "SUBSCRIBE_JOB_RETENTION_DAYS"
+
+	// Throttle settings. All are expressed in seconds except the rate limit,
+	// which takes yt-dlp's own notation. Setting any of them to 0 turns that
+	// particular measure off.
+	envRequestDelay = "SUBSCRIBE_REQUEST_DELAY_SECONDS"
+	envMinDelay     = "SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS"
+	envMaxDelay     = "SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS"
+	envCallGap      = "SUBSCRIBE_CALL_GAP_SECONDS"
+	envRateLimit    = "SUBSCRIBE_RATE_LIMIT"
 )
 
 // Default configuration values used when the corresponding environment variable
@@ -47,6 +56,24 @@ const (
 	// being pruned. Long enough to investigate yesterday's failures, short enough
 	// that indexing a large channel does not leave thousands of rows forever.
 	defaultJobRetentionDays = 14
+
+	// Throttle defaults, chosen for the case that actually matters: archiving
+	// while signed in with your own account's cookies. A signed-in client that
+	// pulls video after video with no pause is what gets accounts flagged, and
+	// the cost of that is the account, not the download. These are deliberately
+	// on out of the box; set any of them to 0 to opt out.
+	//
+	// A whole second between HTTP requests sounds heavy, but requests are mostly
+	// metadata lookups that take milliseconds — this is the pacing that covers
+	// the bulk of the traffic.
+	defaultRequestDelaySeconds = 1
+	// The pre-download pause is randomised between these two so the pattern is
+	// not perfectly regular; the average works out to about 7 seconds per video.
+	defaultMinDownloadDelaySeconds = 3
+	defaultMaxDownloadDelaySeconds = 12
+	// The floor on spacing between yt-dlp launches, which is what stops two
+	// workers from starting at the same instant.
+	defaultCallGapSeconds = 2
 )
 
 // hoursPerDay converts the configured retention in days into a duration.
@@ -84,6 +111,27 @@ type Config struct {
 	// JobRetention is how long a finished queue entry is kept before it is pruned.
 	// Zero keeps finished jobs forever.
 	JobRetention time.Duration
+
+	// Throttle paces every call to the provider. See the defaults above for why
+	// it is on by default.
+	Throttle Throttle
+}
+
+// Throttle is the resolved pacing configuration. It mirrors ytdlp.Throttle
+// rather than importing it, so config stays free of dependencies on the
+// packages it configures; main does the one-line conversion.
+type Throttle struct {
+	// RequestDelay is the pause between HTTP requests inside one yt-dlp run.
+	RequestDelay time.Duration
+	// MinDownloadDelay and MaxDownloadDelay bound the random pause taken before
+	// each download.
+	MinDownloadDelay time.Duration
+	MaxDownloadDelay time.Duration
+	// CallGap is the minimum spacing between yt-dlp launches across all workers.
+	CallGap time.Duration
+	// RateLimit caps download bandwidth in yt-dlp notation ("4.2M"); empty is
+	// unlimited.
+	RateLimit string
 }
 
 // Load builds a Config from SUBSCRIBE_-prefixed environment variables read via
@@ -123,7 +171,41 @@ func Load(getenv func(key string) string) (Config, error) {
 	}
 	cfg.JobRetention = time.Duration(retentionDays) * hoursPerDay
 
+	throttle, err := loadThrottle(getenv)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.Throttle = throttle
+
 	return cfg, nil
+}
+
+// loadThrottle resolves the pacing settings, each of which accepts a fractional
+// number of seconds and treats zero as "turn this one off".
+func loadThrottle(getenv func(key string) string) (Throttle, error) {
+	var throttle Throttle
+	for _, setting := range []durationSetting{
+		{envRequestDelay, defaultRequestDelaySeconds, &throttle.RequestDelay},
+		{envMinDelay, defaultMinDownloadDelaySeconds, &throttle.MinDownloadDelay},
+		{envMaxDelay, defaultMaxDownloadDelaySeconds, &throttle.MaxDownloadDelay},
+		{envCallGap, defaultCallGapSeconds, &throttle.CallGap},
+	} {
+		value, err := nonNegativeSeconds(getenv(setting.key), setting.fallback, setting.key)
+		if err != nil {
+			return Throttle{}, err
+		}
+		*setting.target = value
+	}
+	throttle.RateLimit = strings.TrimSpace(getenv(envRateLimit))
+	return throttle, nil
+}
+
+// durationSetting binds an environment variable to the Throttle field it fills,
+// so the four pacing values are parsed by one loop instead of four near-copies.
+type durationSetting struct {
+	key      string
+	fallback float64
+	target   *time.Duration
 }
 
 // valueOr returns the environment value for key, or fallback when it is empty.
@@ -180,6 +262,25 @@ func nonNegativeInt(raw string, fallback int, key string) (int, error) {
 		return 0, fmt.Errorf("%s must not be negative, got %d", key, value)
 	}
 	return value, nil
+}
+
+// nonNegativeSeconds parses raw as a possibly-fractional number of seconds,
+// using fallback when empty. Zero is allowed and means "disabled"; negatives are
+// rejected because a negative pause has no sensible reading. key names the
+// source variable for errors.
+func nonNegativeSeconds(raw string, fallback float64, key string) (time.Duration, error) {
+	seconds := fallback
+	if raw != "" {
+		parsed, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return 0, fmt.Errorf("parse %s %q: %w", key, raw, err)
+		}
+		seconds = parsed
+	}
+	if seconds < 0 {
+		return 0, fmt.Errorf("%s must not be negative, got %v", key, seconds)
+	}
+	return time.Duration(seconds * float64(time.Second)), nil
 }
 
 // joinPath joins a directory and a name with a single forward slash. sub_scribe

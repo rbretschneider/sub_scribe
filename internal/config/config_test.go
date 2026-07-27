@@ -33,6 +33,13 @@ func TestLoadDefaults(t *testing.T) {
 		Port:          8080,
 		Workers:       2,
 		JobRetention:  14 * 24 * time.Hour,
+		// Pacing is on by default; see the note on the defaults in config.go.
+		Throttle: Throttle{
+			RequestDelay:     time.Second,
+			MinDownloadDelay: 3 * time.Second,
+			MaxDownloadDelay: 12 * time.Second,
+			CallGap:          2 * time.Second,
+		},
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("defaults mismatch:\n got %+v\nwant %+v", cfg, want)
@@ -224,6 +231,64 @@ func TestLoadAppriseURLsSplitting(t *testing.T) {
 			}
 			if !reflect.DeepEqual(cfg.AppriseURLs, tc.want) {
 				t.Errorf("AppriseURLs = %#v, want %#v", cfg.AppriseURLs, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadThrottleOverrides(t *testing.T) {
+	cfg, err := Load(fakeEnv(map[string]string{
+		"SUBSCRIBE_REQUEST_DELAY_SECONDS":      "0.5",
+		"SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS": "10",
+		"SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS": "45",
+		"SUBSCRIBE_CALL_GAP_SECONDS":           "7",
+		"SUBSCRIBE_RATE_LIMIT":                 " 2.5M ",
+	}))
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	want := Throttle{
+		RequestDelay:     500 * time.Millisecond,
+		MinDownloadDelay: 10 * time.Second,
+		MaxDownloadDelay: 45 * time.Second,
+		CallGap:          7 * time.Second,
+		RateLimit:        "2.5M",
+	}
+	if cfg.Throttle != want {
+		t.Errorf("Throttle = %+v, want %+v", cfg.Throttle, want)
+	}
+}
+
+// TestLoadThrottleCanBeTurnedOff checks the opt-out: zero has to mean disabled
+// rather than falling back to the default, or there would be no way to run
+// unthrottled.
+func TestLoadThrottleCanBeTurnedOff(t *testing.T) {
+	cfg, err := Load(fakeEnv(map[string]string{
+		"SUBSCRIBE_REQUEST_DELAY_SECONDS":      "0",
+		"SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS": "0",
+		"SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS": "0",
+		"SUBSCRIBE_CALL_GAP_SECONDS":           "0",
+	}))
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if (cfg.Throttle != Throttle{}) {
+		t.Errorf("Throttle = %+v, want the zero value (disabled)", cfg.Throttle)
+	}
+}
+
+func TestLoadThrottleRejectsBadValues(t *testing.T) {
+	tests := map[string]map[string]string{
+		"negative delay":  {"SUBSCRIBE_REQUEST_DELAY_SECONDS": "-1"},
+		"not a number":    {"SUBSCRIBE_CALL_GAP_SECONDS": "soon"},
+		"negative gap":    {"SUBSCRIBE_CALL_GAP_SECONDS": "-0.5"},
+		"negative window": {"SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS": "-30"},
+	}
+	for name, env := range tests {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Load(fakeEnv(env)); err == nil {
+				t.Errorf("Load(%v) returned nil error, want a rejection", env)
 			}
 		})
 	}

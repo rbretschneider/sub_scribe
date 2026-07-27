@@ -154,7 +154,7 @@ func buildService(cfg config.Config, db *store.DB, hub *events.Hub, clock jobs.C
 		Profiles:     db.Profiles(),
 		Tasks:        db.Tasks(),
 		Queue:        db.Tasks(),
-		Runner:       ytdlp.NewExecRunner(cfg.YtDlpPath, cfg.POTProviderURL),
+		Runner:       ytdlp.NewExecRunner(cfg.YtDlpPath, cfg.POTProviderURL, throttleFor(cfg)),
 		Naming:       naming.NewRenderer(),
 		Metadata:     metadata.NewWriter(),
 		Feed:         feed.NewWriter(cfg.FeedDir),
@@ -168,6 +168,28 @@ func buildService(cfg config.Config, db *store.DB, hub *events.Hub, clock jobs.C
 		CookiesPath:  cfg.CookiesPath,
 		JobRetention: cfg.JobRetention,
 	})
+}
+
+// throttleFor converts the resolved pacing configuration into the downloader's
+// own type. The two are kept separate so the config package does not depend on
+// the packages it configures.
+func throttleFor(cfg config.Config) ytdlp.Throttle {
+	return ytdlp.Throttle{
+		RequestDelay:     cfg.Throttle.RequestDelay,
+		MinDownloadDelay: cfg.Throttle.MinDownloadDelay,
+		MaxDownloadDelay: cfg.Throttle.MaxDownloadDelay,
+		RateLimit:        cfg.Throttle.RateLimit,
+		CallGap:          cfg.Throttle.CallGap,
+	}
+}
+
+// rateLimitLabel renders an unset bandwidth cap as a word rather than an empty
+// string, so the startup line reads as a statement either way.
+func rateLimitLabel(limit string) string {
+	if limit == "" {
+		return "unlimited"
+	}
+	return limit
 }
 
 // buildNotifier selects the Apprise notifier when notification URLs are
@@ -249,6 +271,13 @@ func serve(cfg config.Config, db *store.DB, svc *library.Service, clock jobs.Clo
 	}()
 
 	logger.Info("sub_scribe listening", "addr", server.Addr, "workers", cfg.Workers, "media_dir", cfg.MediaDir)
+	// Pacing is logged because it is invisible otherwise: a run that looks slow
+	// should be identifiable as deliberate restraint rather than a problem.
+	logger.Info("provider pacing",
+		"request_delay", cfg.Throttle.RequestDelay,
+		"download_delay", fmt.Sprintf("%v–%v", cfg.Throttle.MinDownloadDelay, cfg.Throttle.MaxDownloadDelay),
+		"call_gap", cfg.Throttle.CallGap,
+		"rate_limit", rateLimitLabel(cfg.Throttle.RateLimit))
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("http server: %w", err)
 	}

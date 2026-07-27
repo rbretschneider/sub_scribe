@@ -185,6 +185,45 @@ provider automatically. If you run sub_scribe as a lone container instead, it
 simply falls back to cookies. To point at a provider you host yourself, set
 `SUBSCRIBE_POT_PROVIDER_URL=http://your-provider:4416`.
 
+## Pacing
+
+sub_scribe deliberately throttles itself, and this is on by default.
+
+The reason is your account. Uploading cookies means every request YouTube sees
+is signed in as you, and a signed-in client that pulls video after video with no
+pause looks like exactly what it is. The penalty for that is not a failed
+download, it is the account — and replacing a Google account now means handing
+over a phone number, which is not something to lose casually.
+
+Four settings, all in the table below:
+
+- **`SUBSCRIBE_REQUEST_DELAY_SECONDS`** pauses between individual HTTP requests
+  within one yt-dlp run. Most traffic is metadata lookups rather than downloads,
+  so this is the one that covers the bulk of it.
+- **`SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS`/`_MAX_SECONDS`** are a random pause
+  taken before each download. Randomised on purpose: a perfectly regular gap is
+  itself a signature.
+- **`SUBSCRIBE_CALL_GAP_SECONDS`** is enforced by sub_scribe rather than yt-dlp.
+  The settings above only pace one run against itself, so with several workers
+  they would still start together and hit YouTube in lockstep. This is what
+  bounds the overall rate.
+- **`SUBSCRIBE_RATE_LIMIT`** caps download bandwidth (`4M`, `500K`). Off by
+  default.
+
+Set any of them to `0` to turn that measure off. If you are archiving a large
+back catalogue for the first time — the point at which the traffic is heaviest
+and most conspicuous — consider raising them for that run.
+
+The resolved settings are logged at startup, so a run that feels slow can be
+identified as deliberate restraint rather than a problem:
+
+```
+INFO provider pacing request_delay=1s download_delay=3s–12s call_gap=2s rate_limit=unlimited
+```
+
+Anything you pass yourself through a media profile's extra yt-dlp arguments wins
+over these, since yt-dlp takes the last occurrence of a flag.
+
 ## Configuration
 
 All configuration is via environment variables (sensible defaults shown):
@@ -204,6 +243,11 @@ All configuration is via environment variables (sensible defaults shown):
 | `SUBSCRIBE_APPRISE_BINARY` | `apprise` | Path to Apprise (notifications) |
 | `SUBSCRIBE_APPRISE_URLS` | *(none)* | Comma-separated Apprise URLs |
 | `SUBSCRIBE_POT_PROVIDER_URL` | *(none)* | Base URL of a PO-token provider (skip cookies for most videos) |
+| `SUBSCRIBE_REQUEST_DELAY_SECONDS` | `1` | Pause between HTTP requests (see [Pacing](#pacing)); `0` disables |
+| `SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS` | `3` | Lower bound of the random pause before each download |
+| `SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS` | `12` | Upper bound of that pause |
+| `SUBSCRIBE_CALL_GAP_SECONDS` | `2` | Minimum spacing between yt-dlp launches, across all workers |
+| `SUBSCRIBE_RATE_LIMIT` | *(unlimited)* | Download bandwidth cap in yt-dlp notation, e.g. `4M` or `500K` |
 
 ## Naming templates
 

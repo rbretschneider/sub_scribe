@@ -85,7 +85,7 @@ func TestBuildDownloadArgsKeepsScratchFilesOffTheDestination(t *testing.T) {
 		OutputPath: "Chan/Season 2026/video",
 		HomeDir:    "/media",
 		TempDir:    "/var/tmp/sub_scribe",
-	}, "")
+	}, "", Throttle{})
 
 	if !containsPair(args, flagPaths, "home:/media") {
 		t.Errorf("expected --paths home:/media in %v", args)
@@ -102,7 +102,7 @@ func TestBuildDownloadArgsKeepsScratchFilesOffTheDestination(t *testing.T) {
 
 func TestBuildDownloadArgsOmitsPathsWhenNoHomeIsGiven(t *testing.T) {
 	args := buildDownloadArgs("https://example.com/v",
-		DownloadOptions{OutputPath: "/media/v", TempDir: "/var/tmp/sub_scribe"}, "")
+		DownloadOptions{OutputPath: "/media/v", TempDir: "/var/tmp/sub_scribe"}, "", Throttle{})
 
 	for _, arg := range args {
 		if arg == flagPaths {
@@ -115,7 +115,7 @@ func TestDatedIndexScanStopsAtTheWindowEdge(t *testing.T) {
 	// A shallow listing carries no upload dates, so without a window every item
 	// must be recorded and looked up individually just to learn it is too old. A
 	// dated scan reports the dates up front and stops walking at the edge.
-	args := buildIndexArgs("https://example.com/@chan", IndexOptions{DateAfter: "20260626"}, "")
+	args := buildIndexArgs("https://example.com/@chan", IndexOptions{DateAfter: "20260626"}, "", Throttle{})
 
 	for _, want := range []string{flagDateAfter, "20260626", flagBreakOnReject, flagLazyPlaylist} {
 		if !contains(args, want) {
@@ -131,7 +131,7 @@ func TestDatedIndexScanStopsAtTheWindowEdge(t *testing.T) {
 func TestUndatedIndexScanStaysShallowAndCheap(t *testing.T) {
 	// With no window every item is wanted, so the fast shallow listing is right
 	// and the dates are filled in at download time.
-	args := buildIndexArgs("https://example.com/@chan", IndexOptions{}, "")
+	args := buildIndexArgs("https://example.com/@chan", IndexOptions{}, "", Throttle{})
 
 	if !contains(args, flagFlatPlaylist) {
 		t.Errorf("expected a flat scan when there is no window, got %v", args)
@@ -144,7 +144,7 @@ func TestUndatedIndexScanStaysShallowAndCheap(t *testing.T) {
 }
 
 func TestBuildMetadataArgsRequestsOneItemWithoutDownloading(t *testing.T) {
-	args := buildMetadataArgs("https://example.com/v", "/config/cookies.txt", "")
+	args := buildMetadataArgs("https://example.com/v", "/config/cookies.txt", "", Throttle{})
 
 	for _, want := range []string{flagDumpJSON, flagNoPlaylist, flagSkipDownload} {
 		if !contains(args, want) {

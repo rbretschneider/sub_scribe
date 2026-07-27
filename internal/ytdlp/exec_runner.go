@@ -23,21 +23,37 @@ type ExecRunner struct {
 	// it is passed to yt-dlp for both indexing and downloading so most YouTube
 	// content can be fetched without cookies. Empty disables it.
 	potProviderURL string
+	// throttle is how gently to treat the provider. Its flags are added to every
+	// argument list; its call gap is enforced by pacer.
+	throttle Throttle
+	// pacer spaces out invocations across all workers. Every method waits on it
+	// before starting a process, so the configured gap bounds the whole app's
+	// request rate rather than each worker's.
+	pacer *pacer
 }
 
 var _ Runner = (*ExecRunner)(nil)
 
 // NewExecRunner returns an ExecRunner that invokes the yt-dlp binary at
-// binaryPath. potProviderURL may be empty to disable PO-token support.
-func NewExecRunner(binaryPath, potProviderURL string) *ExecRunner {
-	return &ExecRunner{binaryPath: binaryPath, potProviderURL: potProviderURL}
+// binaryPath. potProviderURL may be empty to disable PO-token support, and a
+// zero Throttle disables pacing entirely.
+func NewExecRunner(binaryPath, potProviderURL string, throttle Throttle) *ExecRunner {
+	return &ExecRunner{
+		binaryPath:     binaryPath,
+		potProviderURL: potProviderURL,
+		throttle:       throttle,
+		pacer:          newPacer(throttle.CallGap),
+	}
 }
 
 // Index enumerates a collection's items by running yt-dlp with --dump-json and
 // parsing each emitted JSON line. Blank and unparseable lines are logged and
 // skipped rather than failing the whole index.
 func (r *ExecRunner) Index(ctx context.Context, url string, opts IndexOptions) ([]IndexEntry, error) {
-	cmd := exec.CommandContext(ctx, r.binaryPath, buildIndexArgs(url, opts, r.potProviderURL)...)
+	if err := r.pacer.wait(ctx); err != nil {
+		return nil, fmt.Errorf("yt-dlp index %q: %w", url, err)
+	}
+	cmd := exec.CommandContext(ctx, r.binaryPath, buildIndexArgs(url, opts, r.potProviderURL, r.throttle)...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -64,7 +80,10 @@ func isEarlyStop(err error) bool {
 // what supplies fields (notably the upload date) that the fast collection index
 // leaves blank.
 func (r *ExecRunner) Metadata(ctx context.Context, url, cookiesPath string) (IndexEntry, error) {
-	cmd := exec.CommandContext(ctx, r.binaryPath, buildMetadataArgs(url, cookiesPath, r.potProviderURL)...)
+	if err := r.pacer.wait(ctx); err != nil {
+		return IndexEntry{}, fmt.Errorf("yt-dlp metadata %q: %w", url, err)
+	}
+	cmd := exec.CommandContext(ctx, r.binaryPath, buildMetadataArgs(url, cookiesPath, r.potProviderURL, r.throttle)...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -108,7 +127,10 @@ const (
 // Download fetches one item, streaming progress to onProgress and capturing the
 // final file path yt-dlp prints after moving the completed download.
 func (r *ExecRunner) Download(ctx context.Context, url string, opts DownloadOptions, onProgress ProgressFunc) (DownloadResult, error) {
-	cmd := exec.CommandContext(ctx, r.binaryPath, buildDownloadArgs(url, opts, r.potProviderURL)...)
+	if err := r.pacer.wait(ctx); err != nil {
+		return DownloadResult{}, fmt.Errorf("yt-dlp download %q: %w", url, err)
+	}
+	cmd := exec.CommandContext(ctx, r.binaryPath, buildDownloadArgs(url, opts, r.potProviderURL, r.throttle)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return DownloadResult{}, fmt.Errorf("yt-dlp download %q: stdout pipe: %w", url, err)

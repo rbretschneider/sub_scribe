@@ -117,7 +117,7 @@ func TestBuildIndexArgs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildIndexArgs(tt.url, IndexOptions{CookiesPath: tt.cookiesPath}, tt.potProviderURL)
+			got := buildIndexArgs(tt.url, IndexOptions{CookiesPath: tt.cookiesPath}, tt.potProviderURL, Throttle{})
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("buildIndexArgs() = %v, want %v", got, tt.want)
 			}
@@ -227,7 +227,7 @@ func TestBuildDownloadArgs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildDownloadArgs(url, tt.opts, tt.potProviderURL)
+			got := buildDownloadArgs(url, tt.opts, tt.potProviderURL, Throttle{})
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("buildDownloadArgs() =\n%v\nwant\n%v", got, tt.want)
 			}
@@ -316,7 +316,7 @@ func TestScanDownloadOutputOnRealYtDlpOutput(t *testing.T) {
 func TestDownloadArgsPrintTemplateCarriesTheMarker(t *testing.T) {
 	// The marker has to travel inside the --print template, or nothing on stdout
 	// identifies the finished file.
-	args := buildDownloadArgs("https://example.com/v", DownloadOptions{OutputPath: "/media/out"}, "")
+	args := buildDownloadArgs("https://example.com/v", DownloadOptions{OutputPath: "/media/out"}, "", Throttle{})
 
 	if !containsPair(args, flagPrint, "after_move:"+afterMovePrintPrefix+"%(filepath)s") {
 		t.Fatalf("--print template does not carry the marker: %v", args)

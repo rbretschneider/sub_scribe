@@ -167,7 +167,7 @@ func isLivestream(raw indexLine) bool {
 // upload dates. With one, the scan is deep enough to report each item's date and
 // is told to stop at the first item older than the window — which turns a whole
 // back catalogue into just the handful of recent items actually wanted.
-func buildIndexArgs(url string, opts IndexOptions, potProviderURL string) []string {
+func buildIndexArgs(url string, opts IndexOptions, potProviderURL string, throttle Throttle) []string {
 	args := []string{flagDumpJSON, flagIgnoreErrors}
 	if opts.DateAfter == "" {
 		args = append(args, flagFlatPlaylist)
@@ -176,21 +176,23 @@ func buildIndexArgs(url string, opts IndexOptions, potProviderURL string) []stri
 	}
 	args = appendCookies(args, opts.CookiesPath)
 	args = appendPOTProvider(args, potProviderURL)
+	args = throttle.appendRequestFlags(args)
 	return append(args, url)
 }
 
 // buildMetadataArgs builds the yt-dlp argument list for fetching one item's full
 // metadata. --no-playlist keeps a URL that also belongs to a playlist from
 // expanding into the whole collection.
-func buildMetadataArgs(url, cookiesPath, potProviderURL string) []string {
+func buildMetadataArgs(url, cookiesPath, potProviderURL string, throttle Throttle) []string {
 	args := []string{flagDumpJSON, flagNoPlaylist, flagSkipDownload}
 	args = appendCookies(args, cookiesPath)
 	args = appendPOTProvider(args, potProviderURL)
+	args = throttle.appendRequestFlags(args)
 	return append(args, url)
 }
 
 // buildDownloadArgs builds the yt-dlp argument list for downloading one item.
-func buildDownloadArgs(url string, opts DownloadOptions, potProviderURL string) []string {
+func buildDownloadArgs(url string, opts DownloadOptions, potProviderURL string, throttle Throttle) []string {
 	args := []string{flagOutput, opts.OutputPath + outputExtTemplate}
 	args = appendPaths(args, opts)
 	args = appendFormat(args, opts)
@@ -201,6 +203,10 @@ func buildDownloadArgs(url string, opts DownloadOptions, potProviderURL string) 
 	if opts.DateAfter != "" {
 		args = append(args, flagDateAfter, opts.DateAfter)
 	}
+	// The throttle goes before the user's own arguments so that anyone who
+	// deliberately passes their own --limit-rate or --sleep-interval overrides it;
+	// with yt-dlp the last occurrence of a flag wins.
+	args = throttle.appendDownloadFlags(args)
 	args = append(args, opts.ExtraArgs...)
 	args = appendProgressFlags(args)
 	return append(args, url)
