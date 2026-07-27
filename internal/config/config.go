@@ -32,10 +32,15 @@ const (
 	// which takes yt-dlp's own notation. Setting any of them to 0 turns that
 	// particular measure off.
 	envRequestDelay = "SUBSCRIBE_REQUEST_DELAY_SECONDS"
-	envMinDelay     = "SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS"
-	envMaxDelay     = "SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS"
-	envCallGap      = "SUBSCRIBE_CALL_GAP_SECONDS"
-	envRateLimit    = "SUBSCRIBE_RATE_LIMIT"
+	// These two keep their original names although they now govern the interval
+	// between downloads rather than a pause before each one. The names still
+	// describe what they do, and renaming them would silently turn into a no-op
+	// in an existing compose file — the worst possible outcome for a setting
+	// whose job is to keep an account safe.
+	envMinDelay  = "SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS"
+	envMaxDelay  = "SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS"
+	envCallGap   = "SUBSCRIBE_CALL_GAP_SECONDS"
+	envRateLimit = "SUBSCRIBE_RATE_LIMIT"
 )
 
 // Default configuration values used when the corresponding environment variable
@@ -63,17 +68,22 @@ const (
 	// the cost of that is the account, not the download. These are deliberately
 	// on out of the box; set any of them to 0 to opt out.
 	//
-	// A whole second between HTTP requests sounds heavy, but requests are mostly
+	// Nothing here is urgent. An archiver that quietly collects a channel over a
+	// day is doing its job; one that empties a channel in ten minutes is doing
+	// its job in the most conspicuous way available.
+	//
+	// Two seconds between HTTP requests sounds heavy, but requests are mostly
 	// metadata lookups that take milliseconds — this is the pacing that covers
 	// the bulk of the traffic.
-	defaultRequestDelaySeconds = 1
-	// The pre-download pause is randomised between these two so the pattern is
-	// not perfectly regular; the average works out to about 7 seconds per video.
-	defaultMinDownloadDelaySeconds = 3
-	defaultMaxDownloadDelaySeconds = 12
+	defaultRequestDelaySeconds = 2
+	// Roughly one download every ten minutes, randomised across this range so
+	// the interval is not itself a recognisable pattern. This is enforced by the
+	// task queue, not by a sleeping worker, so nothing else is held up by it.
+	defaultMinDownloadIntervalSeconds = 8 * 60
+	defaultMaxDownloadIntervalSeconds = 12 * 60
 	// The floor on spacing between yt-dlp launches, which is what stops two
-	// workers from starting at the same instant.
-	defaultCallGapSeconds = 2
+	// workers from starting at the same instant. Short enough to simply wait out.
+	defaultCallGapSeconds = 5
 )
 
 // hoursPerDay converts the configured retention in days into a duration.
@@ -123,10 +133,12 @@ type Config struct {
 type Throttle struct {
 	// RequestDelay is the pause between HTTP requests inside one yt-dlp run.
 	RequestDelay time.Duration
-	// MinDownloadDelay and MaxDownloadDelay bound the random pause taken before
-	// each download.
-	MinDownloadDelay time.Duration
-	MaxDownloadDelay time.Duration
+	// MinDownloadInterval and MaxDownloadInterval bound the randomised gap
+	// between the start of one download and the next. Waiting for this happens
+	// in the task queue rather than in a worker, so a long interval costs
+	// nothing but time.
+	MinDownloadInterval time.Duration
+	MaxDownloadInterval time.Duration
 	// CallGap is the minimum spacing between yt-dlp launches across all workers.
 	CallGap time.Duration
 	// RateLimit caps download bandwidth in yt-dlp notation ("4.2M"); empty is
@@ -186,8 +198,8 @@ func loadThrottle(getenv func(key string) string) (Throttle, error) {
 	var throttle Throttle
 	for _, setting := range []durationSetting{
 		{envRequestDelay, defaultRequestDelaySeconds, &throttle.RequestDelay},
-		{envMinDelay, defaultMinDownloadDelaySeconds, &throttle.MinDownloadDelay},
-		{envMaxDelay, defaultMaxDownloadDelaySeconds, &throttle.MaxDownloadDelay},
+		{envMinDelay, defaultMinDownloadIntervalSeconds, &throttle.MinDownloadInterval},
+		{envMaxDelay, defaultMaxDownloadIntervalSeconds, &throttle.MaxDownloadInterval},
 		{envCallGap, defaultCallGapSeconds, &throttle.CallGap},
 	} {
 		value, err := nonNegativeSeconds(getenv(setting.key), setting.fallback, setting.key)

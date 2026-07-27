@@ -30,6 +30,7 @@ import (
 	"sub_scribe/internal/metadata"
 	"sub_scribe/internal/naming"
 	"sub_scribe/internal/notify"
+	"sub_scribe/internal/pacing"
 	"sub_scribe/internal/scheduler"
 	"sub_scribe/internal/sponsorblock"
 	"sub_scribe/internal/store"
@@ -155,6 +156,7 @@ func buildService(cfg config.Config, db *store.DB, hub *events.Hub, clock jobs.C
 		Tasks:        db.Tasks(),
 		Queue:        db.Tasks(),
 		Runner:       ytdlp.NewExecRunner(cfg.YtDlpPath, cfg.POTProviderURL, throttleFor(cfg)),
+		DownloadPace: downloadPacerFor(cfg),
 		Naming:       naming.NewRenderer(),
 		Metadata:     metadata.NewWriter(),
 		Feed:         feed.NewWriter(cfg.FeedDir),
@@ -175,12 +177,17 @@ func buildService(cfg config.Config, db *store.DB, hub *events.Hub, clock jobs.C
 // the packages it configures.
 func throttleFor(cfg config.Config) ytdlp.Throttle {
 	return ytdlp.Throttle{
-		RequestDelay:     cfg.Throttle.RequestDelay,
-		MinDownloadDelay: cfg.Throttle.MinDownloadDelay,
-		MaxDownloadDelay: cfg.Throttle.MaxDownloadDelay,
-		RateLimit:        cfg.Throttle.RateLimit,
-		CallGap:          cfg.Throttle.CallGap,
+		RequestDelay: cfg.Throttle.RequestDelay,
+		RateLimit:    cfg.Throttle.RateLimit,
+		CallGap:      cfg.Throttle.CallGap,
 	}
+}
+
+// downloadPacerFor builds the gate that spaces downloads apart. It is separate
+// from the yt-dlp throttle because the wait is long: it is served by deferring
+// the queued task rather than by holding a worker.
+func downloadPacerFor(cfg config.Config) *pacing.Pacer {
+	return pacing.New(pacing.Jittered(cfg.Throttle.MinDownloadInterval, cfg.Throttle.MaxDownloadInterval))
 }
 
 // rateLimitLabel renders an unset bandwidth cap as a word rather than an empty
@@ -275,7 +282,7 @@ func serve(cfg config.Config, db *store.DB, svc *library.Service, clock jobs.Clo
 	// should be identifiable as deliberate restraint rather than a problem.
 	logger.Info("provider pacing",
 		"request_delay", cfg.Throttle.RequestDelay,
-		"download_delay", fmt.Sprintf("%v–%v", cfg.Throttle.MinDownloadDelay, cfg.Throttle.MaxDownloadDelay),
+		"download_every", fmt.Sprintf("%v–%v", cfg.Throttle.MinDownloadInterval, cfg.Throttle.MaxDownloadInterval),
 		"call_gap", cfg.Throttle.CallGap,
 		"rate_limit", rateLimitLabel(cfg.Throttle.RateLimit))
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

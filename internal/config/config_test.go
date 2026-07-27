@@ -35,10 +35,10 @@ func TestLoadDefaults(t *testing.T) {
 		JobRetention:  14 * 24 * time.Hour,
 		// Pacing is on by default; see the note on the defaults in config.go.
 		Throttle: Throttle{
-			RequestDelay:     time.Second,
-			MinDownloadDelay: 3 * time.Second,
-			MaxDownloadDelay: 12 * time.Second,
-			CallGap:          2 * time.Second,
+			RequestDelay:        2 * time.Second,
+			MinDownloadInterval: 8 * time.Minute,
+			MaxDownloadInterval: 12 * time.Minute,
+			CallGap:             5 * time.Second,
 		},
 	}
 	if !reflect.DeepEqual(cfg, want) {
@@ -249,11 +249,11 @@ func TestLoadThrottleOverrides(t *testing.T) {
 	}
 
 	want := Throttle{
-		RequestDelay:     500 * time.Millisecond,
-		MinDownloadDelay: 10 * time.Second,
-		MaxDownloadDelay: 45 * time.Second,
-		CallGap:          7 * time.Second,
-		RateLimit:        "2.5M",
+		RequestDelay:        500 * time.Millisecond,
+		MinDownloadInterval: 10 * time.Second,
+		MaxDownloadInterval: 45 * time.Second,
+		CallGap:             7 * time.Second,
+		RateLimit:           "2.5M",
 	}
 	if cfg.Throttle != want {
 		t.Errorf("Throttle = %+v, want %+v", cfg.Throttle, want)

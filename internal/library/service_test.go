@@ -691,6 +691,9 @@ type harness struct {
 	// retention is the job-history window the service is built with. Tests that
 	// care about pruning set it and call rebuildService.
 	retention time.Duration
+	// pace, when set, is the download gate. Nil leaves downloads unpaced, which
+	// is what most tests want.
+	pace DownloadPacer
 }
 
 func newHarness(t *testing.T) *harness {
@@ -735,6 +738,7 @@ func (h *harness) rebuildService() {
 		Hook:         h.hook,
 		Events:       h.pub,
 		Clock:        fixedClock{t: h.now},
+		DownloadPace: h.pace,
 		MediaDir:     h.mediaDir,
 		TempDir:      h.tempDir,
 		CookiesPath:  "",
@@ -1228,5 +1232,117 @@ func TestCreateProfileValidatesTemplate(t *testing.T) {
 	}
 	if got.ID == 0 {
 		t.Errorf("expected profile id assigned")
+	}
+}
+
+// stubPacer is a DownloadPacer with a scripted answer, so pacing behaviour is
+// tested without any real waiting.
+type stubPacer struct {
+	allow bool
+	slot  time.Time
+	calls int
+}
+
+func (p *stubPacer) TryClaim() (time.Time, bool) {
+	p.calls++
+	return p.slot, p.allow
+}
+
+// TestDownloadMediaDefersWhenItIsNotItsTurn covers the pacing gate: the item
+// must go back to pending and the task must be deferred rather than run, so a
+// long interval costs a queue row instead of a worker.
+func TestDownloadMediaDefersWhenItIsNotItsTurn(t *testing.T) {
+	slot := time.Date(2026, 7, 27, 12, 30, 0, 0, time.UTC)
+	h := newHarness(t)
+	h.pace = &stubPacer{allow: false, slot: slot}
+	h.rebuildService()
+
+	profileID := h.seedProfile(t)
+	src, _ := h.svc.AddSource(context.Background(), validInput(profileID))
+	mediaID, _ := h.media.Upsert(context.Background(), domain.Media{
+		SourceID:   src.ID,
+		ExternalID: "abc123",
+		Status:     domain.MediaPending,
+		Metadata:   domain.MediaMetadata{Title: "Cool Video", UploadDate: h.now},
+	})
+
+	err := h.svc.DownloadMedia(context.Background(), mediaID)
+
+	var deferral *jobs.Deferral
+	if !errors.As(err, &deferral) {
+		t.Fatalf("DownloadMedia() = %v, want a jobs.Deferral", err)
+	}
+	if !deferral.RunAfter.Equal(slot) {
+		t.Errorf("deferred until %v, want the pacer's slot %v", deferral.RunAfter, slot)
+	}
+	if h.runner.downloadCalls != 0 {
+		t.Errorf("download ran anyway (%d calls); the gate did nothing", h.runner.downloadCalls)
+	}
+	// Left marked "downloading" it would show on the dashboard as an active
+	// download that is not happening, for as long as the interval lasts.
+	got, _ := h.media.Get(context.Background(), mediaID)
+	if got.Status != domain.MediaPending {
+		t.Errorf("status = %q while waiting for its turn, want %q", got.Status, domain.MediaPending)
+	}
+}
+
+func TestDownloadMediaProceedsWhenItIsItsTurn(t *testing.T) {
+	h := newHarness(t)
+	h.pace = &stubPacer{allow: true}
+	h.rebuildService()
+
+	profileID := h.seedProfile(t)
+	src, _ := h.svc.AddSource(context.Background(), validInput(profileID))
+	mediaID, _ := h.media.Upsert(context.Background(), domain.Media{
+		SourceID:   src.ID,
+		ExternalID: "abc123",
+		Status:     domain.MediaPending,
+		Metadata:   domain.MediaMetadata{Title: "Cool Video", UploadDate: h.now},
+	})
+	h.runner.result = ytdlp.DownloadResult{
+		FilePath: filepath.Join(h.mediaDir, "My Channel", "Cool Video.mp4"), FileSize: 1,
+	}
+
+	if err := h.svc.DownloadMedia(context.Background(), mediaID); err != nil {
+		t.Fatalf("DownloadMedia: %v", err)
+	}
+	if h.runner.downloadCalls != 1 {
+		t.Errorf("download calls = %d, want 1", h.runner.downloadCalls)
+	}
+}
+
+// TestPacingDoesNotApplyToItemsBeingDiscarded is the reason the gate sits after
+// the window check rather than before it. A first scan of an old channel rejects
+// hundreds of items without downloading anything; pacing those rejections at one
+// every ten minutes would take days to get through a back catalogue nobody
+// wanted.
+func TestPacingDoesNotApplyToItemsBeingDiscarded(t *testing.T) {
+	pacer := &stubPacer{allow: false, slot: time.Date(2026, 7, 27, 12, 30, 0, 0, time.UTC)}
+	h := newHarness(t)
+	h.pace = pacer
+	h.rebuildService()
+
+	profileID := h.seedProfile(t)
+	cutoff := h.now.AddDate(0, 0, -7)
+	input := validInput(profileID)
+	input.DownloadCutoff = &cutoff
+	src, _ := h.svc.AddSource(context.Background(), input)
+
+	mediaID, _ := h.media.Upsert(context.Background(), domain.Media{
+		SourceID:   src.ID,
+		ExternalID: "old1",
+		Status:     domain.MediaPending,
+		Metadata:   domain.MediaMetadata{Title: "Ancient", UploadDate: h.now.AddDate(-1, 0, 0)},
+	})
+
+	if err := h.svc.DownloadMedia(context.Background(), mediaID); err != nil {
+		t.Fatalf("DownloadMedia: %v", err)
+	}
+	got, _ := h.media.Get(context.Background(), mediaID)
+	if got.Status != domain.MediaSkipped {
+		t.Errorf("status = %q, want %q", got.Status, domain.MediaSkipped)
+	}
+	if pacer.calls != 0 {
+		t.Errorf("the pacer was consulted %d times for an item that was never going to download", pacer.calls)
 	}
 }

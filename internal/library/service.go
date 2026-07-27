@@ -54,6 +54,9 @@ type Deps struct {
 	Hook         PostDownloadHook
 	Events       events.Publisher
 	Clock        jobs.Clock
+	// DownloadPace rations how often a download may start. Nil means unpaced,
+	// which is what tests and a deliberately disabled configuration both want.
+	DownloadPace DownloadPacer
 	MediaDir     string
 	// TempDir is handed to yt-dlp as its scratch space so partial downloads never
 	// touch MediaDir. Empty leaves yt-dlp's default in place.
@@ -651,6 +654,13 @@ func (s *Service) DownloadMedia(ctx context.Context, mediaID int64) error {
 		return s.markSkipped(ctx, mediaID, media, now)
 	}
 
+	// Only now, once this item is known to be one we actually want, does it wait
+	// its turn. Pacing the check itself would make discarding a back catalogue —
+	// hundreds of items, each rejected without downloading anything — take days.
+	if deferral := s.awaitDownloadSlot(ctx, mediaID, media, now); deferral != nil {
+		return deferral
+	}
+
 	rel, err := s.renderOutputPath(ctx, profile, source, media)
 	if err != nil {
 		return fmt.Errorf("render output path: %w", err)
@@ -690,6 +700,38 @@ func (s *Service) DownloadMedia(ctx context.Context, mediaID int64) error {
 	})
 	return nil
 }
+
+// awaitDownloadSlot asks the pacer whether this download may start. When it may
+// not, the item is returned to pending and a jobs.Deferral is returned for the
+// worker to reschedule — the worker is then free for other work rather than
+// asleep for what may be a long interval.
+//
+// Returning the item to pending matters for the UI as much as the data: an item
+// left marked "downloading" while it waits its turn would show a dashboard full
+// of downloads that are not happening.
+func (s *Service) awaitDownloadSlot(ctx context.Context, mediaID int64, media domain.Media, now time.Time) error {
+	if s.deps.DownloadPace == nil {
+		return nil
+	}
+	slot, ok := s.deps.DownloadPace.TryClaim()
+	if ok {
+		return nil
+	}
+	if err := s.deps.Media.SetStatus(ctx, mediaID, domain.MediaPending, now); err != nil {
+		return fmt.Errorf("return media to pending: %w", err)
+	}
+	s.deps.Events.Publish(events.Event{
+		Kind:     events.KindMediaProgress,
+		SourceID: media.SourceID,
+		MediaID:  mediaID,
+		Title:    media.Metadata.Title,
+	})
+	return jobs.Defer(slot, waitingForSlotReason)
+}
+
+// waitingForSlotReason is shown on the job's detail view while it waits, so a
+// deliberately delayed download reads as deliberate rather than stalled.
+const waitingForSlotReason = "waiting for its turn: downloads are deliberately spaced out"
 
 // ensureMetadata fills in details the collection index could not supply. Indexing
 // uses yt-dlp's flat mode for speed, which omits the upload date — and the output

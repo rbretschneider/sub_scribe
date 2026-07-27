@@ -49,13 +49,16 @@ services:
       # Pacing. These are the defaults, spelled out here because they are worth
       # knowing about: if you upload your own cookies, every request carries your
       # account, and an account that pulls video after video with no pause is
-      # what gets flagged. Raise them if you are archiving a large back
-      # catalogue; set any to 0 to disable that measure.
-      SUBSCRIBE_REQUEST_DELAY_SECONDS: "1"        # between HTTP requests
-      SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS: "3"   # random pause before each
-      SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS: "12"  #   download, min..max
-      SUBSCRIBE_CALL_GAP_SECONDS: "2"             # spacing across all workers
-      # SUBSCRIBE_RATE_LIMIT: "4M"                # bandwidth cap, off by default
+      # what gets flagged.
+      #
+      # As set, roughly one video every ten minutes. The wait happens in the task
+      # queue rather than in a worker, so nothing else is held up by it. Set any
+      # value to 0 to disable that measure.
+      SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS: "480"  # one download every
+      SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS: "720"  #   8-12 minutes, at random
+      SUBSCRIBE_REQUEST_DELAY_SECONDS: "2"         # between HTTP requests
+      SUBSCRIBE_CALL_GAP_SECONDS: "5"              # spacing across all workers
+      # SUBSCRIBE_RATE_LIMIT: "4M"                 # bandwidth cap, off by default
     depends_on:
       - pot-provider
     restart: unless-stopped

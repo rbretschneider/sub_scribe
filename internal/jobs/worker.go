@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -129,6 +130,18 @@ func (p *Pool) dispatch(ctx context.Context, task Task) {
 
 	err := p.runHandler(taskCtx, task)
 	now := p.clock.Now()
+	// A deferral is a decision, not a failure: the task keeps its retry budget
+	// and simply becomes eligible later.
+	var deferral *Deferral
+	if errors.As(err, &deferral) {
+		p.log.InfoContext(taskCtx, "task deferred",
+			"task_id", task.ID, "type", task.Type,
+			"run_after", deferral.RunAfter, "reason", deferral.Reason)
+		if deferErr := p.queue.Defer(ctx, task.ID, deferral.RunAfter, now, deferral.Reason); deferErr != nil {
+			p.log.ErrorContext(taskCtx, "deferring task failed", "task_id", task.ID, "error", deferErr)
+		}
+		return
+	}
 	if err != nil {
 		p.log.ErrorContext(taskCtx, "task failed", "task_id", task.ID, "type", task.Type, "error", err)
 		if failErr := p.queue.Fail(ctx, task, err.Error(), now); failErr != nil {

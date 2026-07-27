@@ -120,6 +120,17 @@ type LibraryReader interface {
 	SourceStats(ctx context.Context) (map[int64]SourceStats, error)
 }
 
+// DownloadPacer decides whether a download may start now.
+//
+// Archiving runs with the user's own account credentials, so the rate downloads
+// are started at is a safety setting, not a performance one. TryClaim reports
+// the start time and true when a download may begin, or when the next slot
+// opens and false when it may not — and taking nothing in the second case, so
+// asking does not push the queue further out.
+type DownloadPacer interface {
+	TryClaim() (time.Time, bool)
+}
+
 // MediaService covers the actions a user can take on a single archived item.
 // Kept apart from the read interface so the detail page's read path and its
 // buttons have separate, minimal contracts.

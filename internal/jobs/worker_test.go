@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"testing"
@@ -25,6 +26,11 @@ type fakeQueue struct {
 
 	failedCause string
 	wasFailed   bool
+
+	deferredID       int64
+	deferredRunAfter time.Time
+	deferredReason   string
+	wasDeferred      bool
 }
 
 func (q *fakeQueue) Claim(_ context.Context, _ time.Time) (*Task, error) {
@@ -45,6 +51,14 @@ func (q *fakeQueue) Complete(_ context.Context, id int64, _ time.Time) error {
 func (q *fakeQueue) Fail(_ context.Context, _ Task, cause string, _ time.Time) error {
 	q.failedCause = cause
 	q.wasFailed = true
+	return nil
+}
+
+func (q *fakeQueue) Defer(_ context.Context, id int64, runAfter, _ time.Time, reason string) error {
+	q.deferredID = id
+	q.deferredRunAfter = runAfter
+	q.deferredReason = reason
+	q.wasDeferred = true
 	return nil
 }
 
@@ -143,5 +157,57 @@ func TestProcessOnceFailsTaskWithNoRegisteredHandler(t *testing.T) {
 	}
 	if !queue.wasFailed {
 		t.Error("task with no handler should be failed, not silently dropped")
+	}
+}
+
+// TestDeferredTaskIsRescheduledNotFailed pins the distinction that makes long
+// pacing intervals affordable: a handler declining its turn must not burn an
+// attempt, or a download spaced over hours would exhaust its retry budget
+// waiting and be marked permanently failed without ever being tried.
+func TestDeferredTaskIsRescheduledNotFailed(t *testing.T) {
+	runAfter := time.Date(2026, 7, 27, 12, 30, 0, 0, time.UTC)
+	queue := &fakeQueue{pending: indexTask()}
+	pool := newPoolWith(queue, HandlerFunc(func(context.Context, Task) error {
+		return Defer(runAfter, "waiting its turn")
+	}))
+
+	if _, err := pool.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("ProcessOnce() error = %v", err)
+	}
+
+	if !queue.wasDeferred {
+		t.Fatal("task was not deferred")
+	}
+	if queue.wasFailed {
+		t.Error("a deferral was recorded as a failure, which would consume a retry")
+	}
+	if queue.wasCompleted {
+		t.Error("a deferral was recorded as success, so the work would never run")
+	}
+	if queue.deferredID != 42 {
+		t.Errorf("deferred id = %d, want 42", queue.deferredID)
+	}
+	if !queue.deferredRunAfter.Equal(runAfter) {
+		t.Errorf("deferred run_after = %v, want %v", queue.deferredRunAfter, runAfter)
+	}
+	if queue.deferredReason != "waiting its turn" {
+		t.Errorf("deferred reason = %q, want the handler's reason", queue.deferredReason)
+	}
+}
+
+// TestDeferralSurvivesWrapping checks that a deferral is still recognised after a
+// caller adds context to it, since handlers routinely wrap what they return.
+func TestDeferralSurvivesWrapping(t *testing.T) {
+	runAfter := time.Date(2026, 7, 27, 13, 0, 0, 0, time.UTC)
+	queue := &fakeQueue{pending: indexTask()}
+	pool := newPoolWith(queue, HandlerFunc(func(context.Context, Task) error {
+		return fmt.Errorf("download media 7: %w", Defer(runAfter, "paced"))
+	}))
+
+	if _, err := pool.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("ProcessOnce() error = %v", err)
+	}
+	if !queue.wasDeferred || queue.wasFailed {
+		t.Error("a wrapped deferral was treated as a failure")
 	}
 }

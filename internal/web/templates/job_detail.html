@@ -53,8 +53,12 @@
 </div>
 
 {{if .Job.Task.LastError}}
-<div class="panel panel-danger">
-  <h2 class="panel-title">Why it failed</h2>
+{{/* A job that is still queued has not failed: it is either waiting its turn
+     (downloads are deliberately spaced out) or waiting to retry. Calling that
+     "why it failed", in red, would make deliberate pacing look like breakage. */}}
+{{$failed := eq (printf "%s" .Job.Task.Status) "failed"}}
+<div class="panel{{if $failed}} panel-danger{{end}}">
+  <h2 class="panel-title">{{if $failed}}Why it failed{{else}}Latest status{{end}}</h2>
   <pre class="error-text">{{.Job.Task.LastError}}</pre>
 </div>
 {{end}}

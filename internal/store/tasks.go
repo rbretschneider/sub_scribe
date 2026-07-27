@@ -96,6 +96,20 @@ func (r *TaskRepo) Fail(ctx context.Context, task jobs.Task, cause string, now t
 	return nil
 }
 
+// Defer returns a claimed task to the pending queue with a new eligibility time
+// and no attempt recorded. The reason is stored where an error would go so the
+// job's detail view can say why it is waiting; a task that simply looked pending
+// with a run_after an hour out would read as stuck.
+func (r *TaskRepo) Defer(ctx context.Context, id int64, runAfter, now time.Time, reason string) error {
+	if _, err := r.sql.ExecContext(ctx,
+		`UPDATE tasks SET status = ?, last_error = ?, run_after = ?, updated_at = ? WHERE id = ?`,
+		jobs.StatusPending, reason, runAfter.Unix(), now.Unix(), id,
+	); err != nil {
+		return fmt.Errorf("store: defer task %d: %w", id, err)
+	}
+	return nil
+}
+
 // requeue reschedules a retryable task for a later attempt with backoff.
 func (r *TaskRepo) requeue(ctx context.Context, task jobs.Task, cause string, now time.Time) error {
 	runAfter := task.NextRunAfter(now)

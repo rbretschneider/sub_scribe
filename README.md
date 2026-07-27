@@ -195,30 +195,42 @@ pause looks like exactly what it is. The penalty for that is not a failed
 download, it is the account — and replacing a Google account now means handing
 over a phone number, which is not something to lose casually.
 
+**Out of the box it downloads roughly one video every ten minutes.** That is a
+deliberate choice, not a limitation. Nothing here is urgent: an archiver that
+quietly collects a channel over a day is doing its job, while one that empties a
+channel in ten minutes is doing its job in the most conspicuous way available.
+
 Four settings, all in the table below:
 
+- **`SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS`/`_MAX_SECONDS`** are the interval
+  between the start of one download and the next, picked at random from that
+  range each time. Randomised on purpose: a perfectly regular gap is itself a
+  signature.
 - **`SUBSCRIBE_REQUEST_DELAY_SECONDS`** pauses between individual HTTP requests
   within one yt-dlp run. Most traffic is metadata lookups rather than downloads,
   so this is the one that covers the bulk of it.
-- **`SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS`/`_MAX_SECONDS`** are a random pause
-  taken before each download. Randomised on purpose: a perfectly regular gap is
-  itself a signature.
-- **`SUBSCRIBE_CALL_GAP_SECONDS`** is enforced by sub_scribe rather than yt-dlp.
-  The settings above only pace one run against itself, so with several workers
-  they would still start together and hit YouTube in lockstep. This is what
-  bounds the overall rate.
+- **`SUBSCRIBE_CALL_GAP_SECONDS`** is a floor on how close together two yt-dlp
+  processes may start, so several workers cannot fire at the same instant.
 - **`SUBSCRIBE_RATE_LIMIT`** caps download bandwidth (`4M`, `500K`). Off by
   default.
 
-Set any of them to `0` to turn that measure off. If you are archiving a large
-back catalogue for the first time — the point at which the traffic is heaviest
-and most conspicuous — consider raising them for that run.
+Set any of them to `0` to turn that measure off.
+
+Waiting for a turn happens **in the queue, not in a worker**. A download that is
+not due yet is put back with a later start time and says so on its job page, so
+indexing, feed generation, and anything you click keep running normally while the
+archive fills in slowly in the background. Nothing is blocked behind a ten-minute
+pause, and the wait survives a restart.
+
+This applies only to items actually being downloaded. Discarding a back
+catalogue — hundreds of videos rejected for being outside a source's date window
+— is not paced, because there is nothing being fetched to pace.
 
 The resolved settings are logged at startup, so a run that feels slow can be
 identified as deliberate restraint rather than a problem:
 
 ```
-INFO provider pacing request_delay=1s download_delay=3s–12s call_gap=2s rate_limit=unlimited
+INFO provider pacing request_delay=2s download_every=8m0s–12m0s call_gap=5s rate_limit=unlimited
 ```
 
 Anything you pass yourself through a media profile's extra yt-dlp arguments wins
@@ -243,10 +255,10 @@ All configuration is via environment variables (sensible defaults shown):
 | `SUBSCRIBE_APPRISE_BINARY` | `apprise` | Path to Apprise (notifications) |
 | `SUBSCRIBE_APPRISE_URLS` | *(none)* | Comma-separated Apprise URLs |
 | `SUBSCRIBE_POT_PROVIDER_URL` | *(none)* | Base URL of a PO-token provider (skip cookies for most videos) |
-| `SUBSCRIBE_REQUEST_DELAY_SECONDS` | `1` | Pause between HTTP requests (see [Pacing](#pacing)); `0` disables |
-| `SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS` | `3` | Lower bound of the random pause before each download |
-| `SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS` | `12` | Upper bound of that pause |
-| `SUBSCRIBE_CALL_GAP_SECONDS` | `2` | Minimum spacing between yt-dlp launches, across all workers |
+| `SUBSCRIBE_REQUEST_DELAY_SECONDS` | `2` | Pause between HTTP requests (see [Pacing](#pacing)); `0` disables |
+| `SUBSCRIBE_DOWNLOAD_DELAY_MIN_SECONDS` | `480` | Lower bound of the random interval between downloads |
+| `SUBSCRIBE_DOWNLOAD_DELAY_MAX_SECONDS` | `720` | Upper bound of that interval |
+| `SUBSCRIBE_CALL_GAP_SECONDS` | `5` | Minimum spacing between yt-dlp launches, across all workers |
 | `SUBSCRIBE_RATE_LIMIT` | *(unlimited)* | Download bandwidth cap in yt-dlp notation, e.g. `4M` or `500K` |
 
 ## Naming templates

@@ -13,6 +13,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"sub_scribe/internal/pacing"
 )
 
 // ExecRunner is the subprocess-backed Runner. It shells out to a yt-dlp binary
@@ -29,7 +31,7 @@ type ExecRunner struct {
 	// pacer spaces out invocations across all workers. Every method waits on it
 	// before starting a process, so the configured gap bounds the whole app's
 	// request rate rather than each worker's.
-	pacer *pacer
+	pacer *pacing.Pacer
 }
 
 var _ Runner = (*ExecRunner)(nil)
@@ -42,7 +44,7 @@ func NewExecRunner(binaryPath, potProviderURL string, throttle Throttle) *ExecRu
 		binaryPath:     binaryPath,
 		potProviderURL: potProviderURL,
 		throttle:       throttle,
-		pacer:          newPacer(throttle.CallGap),
+		pacer:          pacing.New(pacing.Fixed(throttle.CallGap)),
 	}
 }
 
@@ -50,7 +52,7 @@ func NewExecRunner(binaryPath, potProviderURL string, throttle Throttle) *ExecRu
 // parsing each emitted JSON line. Blank and unparseable lines are logged and
 // skipped rather than failing the whole index.
 func (r *ExecRunner) Index(ctx context.Context, url string, opts IndexOptions) ([]IndexEntry, error) {
-	if err := r.pacer.wait(ctx); err != nil {
+	if err := r.pacer.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("yt-dlp index %q: %w", url, err)
 	}
 	cmd := exec.CommandContext(ctx, r.binaryPath, buildIndexArgs(url, opts, r.potProviderURL, r.throttle)...)
@@ -80,7 +82,7 @@ func isEarlyStop(err error) bool {
 // what supplies fields (notably the upload date) that the fast collection index
 // leaves blank.
 func (r *ExecRunner) Metadata(ctx context.Context, url, cookiesPath string) (IndexEntry, error) {
-	if err := r.pacer.wait(ctx); err != nil {
+	if err := r.pacer.Wait(ctx); err != nil {
 		return IndexEntry{}, fmt.Errorf("yt-dlp metadata %q: %w", url, err)
 	}
 	cmd := exec.CommandContext(ctx, r.binaryPath, buildMetadataArgs(url, cookiesPath, r.potProviderURL, r.throttle)...)
@@ -127,7 +129,7 @@ const (
 // Download fetches one item, streaming progress to onProgress and capturing the
 // final file path yt-dlp prints after moving the completed download.
 func (r *ExecRunner) Download(ctx context.Context, url string, opts DownloadOptions, onProgress ProgressFunc) (DownloadResult, error) {
-	if err := r.pacer.wait(ctx); err != nil {
+	if err := r.pacer.Wait(ctx); err != nil {
 		return DownloadResult{}, fmt.Errorf("yt-dlp download %q: %w", url, err)
 	}
 	cmd := exec.CommandContext(ctx, r.binaryPath, buildDownloadArgs(url, opts, r.potProviderURL, r.throttle)...)

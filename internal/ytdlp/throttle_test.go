@@ -1,7 +1,6 @@
 package ytdlp
 
 import (
-	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -30,9 +29,9 @@ func TestThrottleRequestFlags(t *testing.T) {
 		},
 		{
 			// A download-only setting must not leak into listing and metadata
-			// calls: yt-dlp would take the pre-download pause on every lookup.
-			name:     "download settings are not applied to plain requests",
-			throttle: Throttle{MinDownloadDelay: 5 * time.Second, RateLimit: "1M"},
+			// calls, where there is no transfer for it to apply to.
+			name:     "the rate limit is not applied to plain requests",
+			throttle: Throttle{RateLimit: "1M"},
 			want:     nil,
 		},
 	}
@@ -58,40 +57,14 @@ func TestThrottleDownloadFlags(t *testing.T) {
 			want:     nil,
 		},
 		{
-			name:     "a range becomes both sleep bounds",
-			throttle: Throttle{MinDownloadDelay: 3 * time.Second, MaxDownloadDelay: 12 * time.Second},
-			want:     []string{"--sleep-interval", "3", "--max-sleep-interval", "12"},
-		},
-		{
-			// yt-dlp rejects a maximum that is not above the minimum, so an
-			// equal or inverted pair has to collapse to a fixed pause.
-			name:     "a maximum below the minimum is dropped",
-			throttle: Throttle{MinDownloadDelay: 10 * time.Second, MaxDownloadDelay: 4 * time.Second},
-			want:     []string{"--sleep-interval", "10"},
-		},
-		{
-			name:     "a maximum without a minimum is ignored",
-			throttle: Throttle{MaxDownloadDelay: 9 * time.Second},
-			want:     nil,
-		},
-		{
 			name:     "rate limit passes through verbatim",
 			throttle: Throttle{RateLimit: "4.2M"},
 			want:     []string{"--limit-rate", "4.2M"},
 		},
 		{
-			name: "everything together, request pacing included",
-			throttle: Throttle{
-				RequestDelay:     time.Second,
-				MinDownloadDelay: 3 * time.Second,
-				MaxDownloadDelay: 12 * time.Second,
-				RateLimit:        "500K",
-			},
-			want: []string{
-				"--sleep-requests", "1",
-				"--sleep-interval", "3", "--max-sleep-interval", "12",
-				"--limit-rate", "500K",
-			},
+			name:     "request pacing applies to downloads too",
+			throttle: Throttle{RequestDelay: time.Second, RateLimit: "500K"},
+			want:     []string{"--sleep-requests", "1", "--limit-rate", "500K"},
 		},
 		{
 			// CallGap is enforced in this process, not by yt-dlp; leaking it as a
@@ -111,66 +84,20 @@ func TestThrottleDownloadFlags(t *testing.T) {
 	}
 }
 
-// TestPacerSpacesReservations checks the property that matters: with several
-// workers asking at once, each gets a distinct slot one gap after the last. A
-// pacer that let them all through together would leave the provider seeing the
-// same burst it sees with no throttle at all.
-func TestPacerSpacesReservations(t *testing.T) {
-	start := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
-	pacer := newPacer(5 * time.Second)
-	pacer.now = func() time.Time { return start } // all callers arrive at once
+// TestNoSleepFlagsBetweenDownloads pins a decision that is easy to undo by
+// reflex. The interval between downloads is long, and yt-dlp's --sleep-interval
+// would spend it inside a running process — holding one of very few workers for
+// ten minutes and starving indexing, feeds, and anything the user just asked
+// for. That wait belongs to the task queue instead.
+func TestNoSleepFlagsBetweenDownloads(t *testing.T) {
+	args := buildDownloadArgs("https://example.com/v", DownloadOptions{OutputPath: "out"}, "",
+		Throttle{RequestDelay: time.Second, RateLimit: "1M", CallGap: 5 * time.Second})
 
-	for i := range 4 {
-		want := start.Add(time.Duration(i) * 5 * time.Second)
-		if got := pacer.reserve(); !got.Equal(want) {
-			t.Errorf("reservation %d = %v, want %v", i, got, want)
+	for _, forbidden := range []string{"--sleep-interval", "--max-sleep-interval"} {
+		if contains(args, forbidden) {
+			t.Errorf("%s makes a worker sleep through the interval; it belongs in the queue: %v",
+				forbidden, args)
 		}
-	}
-}
-
-// TestPacerDoesNotDelayAnIdleCaller checks that a gap which has already elapsed
-// costs nothing, so pacing only bites when calls actually bunch up.
-func TestPacerDoesNotDelayAnIdleCaller(t *testing.T) {
-	now := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
-	pacer := newPacer(5 * time.Second)
-	pacer.now = func() time.Time { return now }
-
-	pacer.reserve()
-	now = now.Add(time.Hour) // a long quiet period
-	if got := pacer.reserve(); !got.Equal(now) {
-		t.Errorf("reservation after an idle period = %v, want %v (no wait)", got, now)
-	}
-}
-
-func TestPacerZeroGapIsDisabled(t *testing.T) {
-	now := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
-	pacer := newPacer(0)
-	pacer.now = func() time.Time { return now }
-
-	for range 3 {
-		if got := pacer.reserve(); !got.Equal(now) {
-			t.Errorf("reservation with no gap = %v, want %v", got, now)
-		}
-	}
-}
-
-// TestPacerWaitHonoursCancellation makes sure a shutdown interrupts the wait and
-// is reported, rather than either hanging or quietly proceeding unthrottled.
-func TestPacerWaitHonoursCancellation(t *testing.T) {
-	pacer := newPacer(time.Hour)
-	pacer.reserve() // claim the first slot so the next caller has to wait
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	if err := pacer.wait(ctx); err == nil {
-		t.Fatal("wait() returned nil for a cancelled context; the call would proceed unthrottled")
-	}
-}
-
-func TestPacerWaitReturnsImmediatelyWhenDisabled(t *testing.T) {
-	if err := newPacer(0).wait(context.Background()); err != nil {
-		t.Fatalf("wait() with no gap = %v, want nil", err)
 	}
 }
 
@@ -179,7 +106,7 @@ func TestPacerWaitReturnsImmediatelyWhenDisabled(t *testing.T) {
 // account, but which never reaches the command line, is worse than none at all —
 // so every call that touches the provider is asserted here, not just downloads.
 func TestThrottleReachesEveryKindOfCall(t *testing.T) {
-	throttle := Throttle{RequestDelay: time.Second, MinDownloadDelay: 3 * time.Second}
+	throttle := Throttle{RequestDelay: time.Second}
 
 	calls := map[string][]string{
 		"index":    buildIndexArgs("https://example.com/@chan", IndexOptions{}, "", throttle),
@@ -190,14 +117,6 @@ func TestThrottleReachesEveryKindOfCall(t *testing.T) {
 		if !containsPair(args, flagSleepRequests, "1") {
 			t.Errorf("%s call is not paced: %v", name, args)
 		}
-	}
-	// The pre-download pause belongs to downloads alone; on a listing it would
-	// stall every item for no benefit.
-	if !containsPair(calls["download"], flagSleepInterval, "3") {
-		t.Errorf("download is missing its pre-download pause: %v", calls["download"])
-	}
-	if contains(calls["index"], flagSleepInterval) {
-		t.Errorf("index must not take the pre-download pause: %v", calls["index"])
 	}
 }
 
