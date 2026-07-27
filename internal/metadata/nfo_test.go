@@ -78,7 +78,7 @@ func TestBuildEpisodeNFO(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, err := BuildEpisodeNFO(tt.media, tt.sourceName)
+			body, err := BuildEpisodeNFO(tt.media, tt.sourceName, SeasonEpisode{})
 			if err != nil {
 				t.Fatalf("BuildEpisodeNFO: %v", err)
 			}
@@ -100,7 +100,7 @@ func assertHasXMLHeader(t *testing.T, body []byte) {
 }
 
 func TestBuildEpisodeNFORootElement(t *testing.T) {
-	body, err := BuildEpisodeNFO(sampleMedia(), "Src")
+	body, err := BuildEpisodeNFO(sampleMedia(), "Src", SeasonEpisode{})
 	if err != nil {
 		t.Fatalf("BuildEpisodeNFO: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestBuildNFODispatchesOnFormat(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, err := BuildNFO(sampleMedia(), "Src", tt.format)
+			body, err := BuildNFO(sampleMedia(), "Src", tt.format, SeasonEpisode{})
 			if err != nil {
 				t.Fatalf("BuildNFO: %v", err)
 			}

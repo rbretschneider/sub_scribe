@@ -900,6 +900,7 @@ func (s *Service) finalizeDownload(ctx context.Context, source domain.Source, me
 	if err := s.deps.Metadata.WriteFor(ctx, filePath, media, source.Name, profile.MetadataFormat); err != nil {
 		log.Printf("library: write metadata for %q: %v", filePath, err)
 	}
+	s.writeShowMetadata(ctx, source, filePath, profile)
 
 	items, err := s.deps.Media.ListBySource(ctx, source.ID)
 	if err != nil {
@@ -915,6 +916,42 @@ func (s *Service) finalizeDownload(ctx context.Context, source domain.Source, me
 	if err := s.deps.Notifier.Notify(ctx, "Downloaded", media.Metadata.Title); err != nil {
 		log.Printf("library: notify for %q: %v", media.Metadata.Title, err)
 	}
+}
+
+// writeShowMetadata keeps the series-level sidecar at the channel folder's root
+// up to date, so a media server can identify the series from what is on disk.
+//
+// Left to the folder name alone, a server matches it against an online database
+// and takes whatever comes back: "Channel 5 with Andrew Callaghan" came back as
+// the anime "A-Channel". Only a series library has any use for this, and only a
+// layout with a channel folder has anywhere to put it.
+func (s *Service) writeShowMetadata(ctx context.Context, source domain.Source, filePath string, profile domain.MediaProfile) {
+	if profile.MetadataFormat == domain.MetadataMovie {
+		return
+	}
+	showDir, ok := s.showDirFor(filePath)
+	if !ok {
+		return
+	}
+	if err := s.deps.Metadata.WriteShow(ctx, showDir, source.Name, source.URL); err != nil {
+		log.Printf("library: write show metadata in %q: %v", showDir, err)
+	}
+}
+
+// showDirFor returns the folder a media server treats as the series root: the
+// first directory beneath the media root. It reports false for a flat layout,
+// where the file sits directly in the media root and there is no series folder
+// to describe.
+func (s *Service) showDirFor(filePath string) (string, bool) {
+	rel, err := filepath.Rel(s.deps.MediaDir, filePath)
+	if err != nil {
+		return "", false
+	}
+	parts := strings.Split(rel, string(filepath.Separator))
+	if len(parts) < 2 || parts[0] == "" || parts[0] == ".." {
+		return "", false
+	}
+	return filepath.Join(s.deps.MediaDir, parts[0]), true
 }
 
 // publishProgress emits a media-progress event with the given percentage.

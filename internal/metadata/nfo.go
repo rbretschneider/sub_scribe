@@ -6,6 +6,9 @@ package metadata
 import (
 	"encoding/xml"
 	"fmt"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"time"
 
 	"sub_scribe/internal/domain"
@@ -23,13 +26,32 @@ const (
 // episodeDetails is the root <episodedetails> element of a Kodi/Jellyfin
 // episode NFO document.
 type episodeDetails struct {
-	XMLName  xml.Name `xml:"episodedetails"`
-	Title    string   `xml:"title"`
+	XMLName xml.Name `xml:"episodedetails"`
+	Title   string   `xml:"title"`
+	// Season and Episode are omitted when unknown rather than written as zero,
+	// which a media server would read as a genuine "season 0, episode 0".
+	Season   int      `xml:"season,omitempty"`
+	Episode  int      `xml:"episode,omitempty"`
 	Plot     string   `xml:"plot"`
 	Aired    string   `xml:"aired"`
 	Studio   string   `xml:"studio"`
 	UniqueID uniqueID `xml:"uniqueid"`
 	Runtime  int      `xml:"runtime"`
+}
+
+// tvShowDetails is the root <tvshow> element of the series-level NFO that goes
+// at a channel folder's root.
+//
+// Without it a media server has only the folder name to identify the series by,
+// which it then matches against an online database — the failure that turns a
+// channel called "Channel 5 with Andrew Callaghan" into a Japanese anime called
+// "A-Channel". Stating the title locally removes the guesswork entirely.
+type tvShowDetails struct {
+	XMLName  xml.Name `xml:"tvshow"`
+	Title    string   `xml:"title"`
+	Plot     string   `xml:"plot,omitempty"`
+	Studio   string   `xml:"studio,omitempty"`
+	UniqueID uniqueID `xml:"uniqueid"`
 }
 
 // uniqueID is the <uniqueid> element carrying the provider's stable identifier.
@@ -55,18 +77,18 @@ type movieDetails struct {
 // BuildNFO renders media into the NFO document matching the given format. An
 // empty or unrecognized format falls back to the Jellyfin layout, since the
 // Kodi/Jellyfin NFO is the widely-read default.
-func BuildNFO(media domain.Media, sourceName string, format domain.MetadataFormat) ([]byte, error) {
+func BuildNFO(media domain.Media, sourceName string, format domain.MetadataFormat, numbering SeasonEpisode) ([]byte, error) {
 	if format == domain.MetadataMovie {
 		return BuildMovieNFO(media, sourceName)
 	}
-	return BuildEpisodeNFO(media, sourceName)
+	return BuildEpisodeNFO(media, sourceName, numbering)
 }
 
 // BuildEpisodeNFO renders media into a Kodi/Jellyfin-compatible
 // <episodedetails> XML document. sourceName becomes the <studio>. The returned
 // bytes carry the XML header and are safe to write directly to a .nfo file.
-func BuildEpisodeNFO(media domain.Media, sourceName string) ([]byte, error) {
-	details := newEpisodeDetails(media, sourceName)
+func BuildEpisodeNFO(media domain.Media, sourceName string, numbering SeasonEpisode) ([]byte, error) {
+	details := newEpisodeDetails(media, sourceName, numbering)
 	return marshalNFO(details, "episode")
 }
 
@@ -99,16 +121,60 @@ func newMovieDetails(media domain.Media, sourceName string) movieDetails {
 }
 
 // newEpisodeDetails maps domain media onto the NFO element structure.
-func newEpisodeDetails(media domain.Media, sourceName string) episodeDetails {
+func newEpisodeDetails(media domain.Media, sourceName string, numbering SeasonEpisode) episodeDetails {
 	meta := media.Metadata
 	return episodeDetails{
 		Title:    meta.Title,
+		Season:   numbering.Season,
+		Episode:  numbering.Episode,
 		Plot:     meta.Description,
 		Aired:    meta.UploadDate.Format(airedDateLayout),
 		Studio:   sourceName,
 		UniqueID: uniqueID{Type: uniqueIDType, Value: media.ExternalID},
 		Runtime:  runtimeMinutes(meta.Duration),
 	}
+}
+
+// SeasonEpisode is the numbering an episode NFO declares. The zero value means
+// "not known", and both elements are then left out.
+type SeasonEpisode struct {
+	Season  int
+	Episode int
+}
+
+// seasonEpisodePattern matches the "s2026e072401" token in a file name.
+var seasonEpisodePattern = regexp.MustCompile(`(?i)\bs(\d{1,4})e(\d{1,6})\b`)
+
+// ParseSeasonEpisode reads the season and episode out of a file name.
+//
+// The numbering is taken from the name rather than recomputed because the name
+// is what a media server parses. Deriving it separately would let the two
+// disagree, and an NFO that contradicts the filename is worse than one that
+// stays quiet: the server has to pick, and the user cannot tell which it picked.
+func ParseSeasonEpisode(name string) (SeasonEpisode, bool) {
+	match := seasonEpisodePattern.FindStringSubmatch(filepath.Base(name))
+	if match == nil {
+		return SeasonEpisode{}, false
+	}
+	season, err := strconv.Atoi(match[1])
+	if err != nil {
+		return SeasonEpisode{}, false
+	}
+	episode, err := strconv.Atoi(match[2])
+	if err != nil {
+		return SeasonEpisode{}, false
+	}
+	return SeasonEpisode{Season: season, Episode: episode}, true
+}
+
+// BuildShowNFO renders the series-level <tvshow> document for a channel.
+func BuildShowNFO(name, url string) ([]byte, error) {
+	return marshalNFO(tvShowDetails{
+		Title:    name,
+		Plot:     url,
+		Studio:   name,
+		UniqueID: uniqueID{Type: uniqueIDType, Value: url},
+	}, "tvshow")
 }
 
 // runtimeMinutes converts a duration to whole minutes, truncating any

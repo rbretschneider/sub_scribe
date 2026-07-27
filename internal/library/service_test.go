@@ -615,9 +615,12 @@ func (p *capturingPublisher) countKind(k events.Kind) int {
 
 // fakeMetadataWriter records metadata writes and the format requested.
 type fakeMetadataWriter struct {
-	calls      int
-	lastFormat domain.MetadataFormat
-	err        error
+	calls        int
+	lastFormat   domain.MetadataFormat
+	showCalls    int
+	lastShowDir  string
+	lastShowName string
+	err          error
 }
 
 func (w *fakeMetadataWriter) WriteFor(_ context.Context, _ string, _ domain.Media, _ string, format domain.MetadataFormat) error {
@@ -1345,4 +1348,11 @@ func TestPacingDoesNotApplyToItemsBeingDiscarded(t *testing.T) {
 	if pacer.calls != 0 {
 		t.Errorf("the pacer was consulted %d times for an item that was never going to download", pacer.calls)
 	}
+}
+
+func (w *fakeMetadataWriter) WriteShow(_ context.Context, showDir, name, _ string) error {
+	w.showCalls++
+	w.lastShowDir = showDir
+	w.lastShowName = name
+	return nil
 }

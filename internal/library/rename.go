@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -52,30 +53,82 @@ func (s *Service) ApplyNamingTemplate(ctx context.Context, sourceID int64) (Rena
 		}
 		report.Checked++
 
+		at := media.FilePath
 		want, ok := s.wantedPathFor(ctx, resolver, media)
-		if !ok || want == media.FilePath {
-			continue
+		switch {
+		case !ok || want == media.FilePath:
+			// Already where it belongs; its sidecar is still refreshed below,
+			// since a file can be correctly named and badly described.
+		default:
+			if _, err := os.Stat(media.FilePath); err != nil {
+				// The recorded file is gone. That is a different inconsistency, and
+				// startup reconciliation owns it; reporting it as blocked here would
+				// point the user at a name clash that does not exist.
+				continue
+			}
+			moved, err := s.moveMediaFile(ctx, media, want)
+			if err != nil {
+				return report, err
+			}
+			if !moved {
+				report.Blocked++
+				continue
+			}
+			vacated[filepath.Dir(media.FilePath)] = true
+			at = want
+			report.Renamed++
 		}
-		if _, err := os.Stat(media.FilePath); err != nil {
-			// The recorded file is gone. That is a different inconsistency, and
-			// startup reconciliation owns it; reporting it as blocked here would
-			// point the user at a name clash that does not exist.
-			continue
-		}
-		moved, err := s.moveMediaFile(ctx, media, want)
-		if err != nil {
-			return report, err
-		}
-		if !moved {
-			report.Blocked++
-			continue
-		}
-		vacated[filepath.Dir(media.FilePath)] = true
-		report.Renamed++
+		s.refreshEpisodeMetadata(ctx, sourceID, resolver, media, at)
 	}
 
 	s.pruneEmptyDirs(ctx, vacated)
+	s.backfillShowMetadata(ctx, sourceID)
 	return report, nil
+}
+
+// refreshEpisodeMetadata rewrites an item's sidecar at its current path.
+//
+// A sidecar written under an older version of sub_scribe can be missing the
+// season and episode elements a media server needs to place the episode, and a
+// file that was just renamed has a sidecar describing the name it used to have.
+// Both are invisible to the user and both are fixed by rewriting it.
+func (s *Service) refreshEpisodeMetadata(ctx context.Context, sourceID int64, resolver *pathResolver, media domain.Media, at string) {
+	source, profile, ok := resolver.contextFor(ctx, sourceID)
+	if !ok {
+		return
+	}
+	if err := s.deps.Metadata.WriteFor(ctx, at, media, source.Name, profile.MetadataFormat); err != nil {
+		log.Printf("library: refresh metadata for %q: %v", at, err)
+	}
+}
+
+// backfillShowMetadata plants the series-level sidecar for a library that was
+// downloaded before sub_scribe wrote one. It rides along with the naming pass
+// because both repair the same thing — a media server that cannot tell what it
+// is looking at — and a user who has come looking for that fix should not have
+// to find two separate buttons.
+func (s *Service) backfillShowMetadata(ctx context.Context, sourceID int64) {
+	source, err := s.deps.Sources.Get(ctx, sourceID)
+	if err != nil {
+		return
+	}
+	profile, err := s.deps.Profiles.Get(ctx, source.MediaProfileID)
+	if err != nil {
+		return
+	}
+	// Re-read after the renames: the paths gathered before the pass may have
+	// moved, and the folder is derived from the path.
+	items, err := s.deps.Media.ListBySource(ctx, sourceID)
+	if err != nil {
+		return
+	}
+	for _, media := range items {
+		if media.Status != domain.MediaDownloaded || media.FilePath == "" {
+			continue
+		}
+		s.writeShowMetadata(ctx, source, media.FilePath, profile)
+		return // every item shares one channel folder; one write covers them all
+	}
 }
 
 // wantedPathFor renders where a media item's file belongs under the current

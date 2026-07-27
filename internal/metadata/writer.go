@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -35,7 +36,10 @@ func (w *Writer) WriteFor(ctx context.Context, mediaFilePath string, media domai
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("write nfo for %q: %w", mediaFilePath, err)
 	}
-	body, err := BuildNFO(media, sourceName, format)
+	// The numbering comes from the file name so the two can never contradict
+	// each other; when the name carries no token, the NFO simply omits it.
+	numbering, _ := ParseSeasonEpisode(mediaFilePath)
+	body, err := BuildNFO(media, sourceName, format, numbering)
 	if err != nil {
 		return fmt.Errorf("write nfo for %q: %w", mediaFilePath, err)
 	}
@@ -45,6 +49,39 @@ func (w *Writer) WriteFor(ctx context.Context, mediaFilePath string, media domai
 	}
 	return nil
 }
+
+// showNFOName is the series-level file media servers look for at a show's root.
+const showNFOName = "tvshow.nfo"
+
+// WriteShow writes the series-level NFO at a channel's folder root, naming the
+// series explicitly so a media server has no reason to guess at it.
+//
+// It rewrites the file only when the content would change. The file is tiny, but
+// touching it on every download would restamp its modification time and invite
+// the media server to rescan the series each time.
+func (w *Writer) WriteShow(ctx context.Context, showDir, name, url string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("write show nfo in %q: %w", showDir, err)
+	}
+	body, err := BuildShowNFO(name, url)
+	if err != nil {
+		return fmt.Errorf("write show nfo in %q: %w", showDir, err)
+	}
+	path := filepath.Join(showDir, showNFOName)
+	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, body) {
+		return nil
+	}
+	if err := os.MkdirAll(showDir, showDirMode); err != nil {
+		return fmt.Errorf("create show directory %q: %w", showDir, err)
+	}
+	if err := os.WriteFile(path, body, nfoFileMode); err != nil {
+		return fmt.Errorf("write show nfo to %q: %w", path, err)
+	}
+	return nil
+}
+
+// showDirMode is the permission mode for a created show directory.
+const showDirMode os.FileMode = 0o755
 
 // nfoPathFor returns mediaFilePath with its extension replaced by ".nfo".
 func nfoPathFor(mediaFilePath string) string {

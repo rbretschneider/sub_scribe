@@ -219,3 +219,98 @@ func TestCompanionMovesKeepsMultiPartExtensions(t *testing.T) {
 		t.Errorf("the .en.srt subtitle lost its language suffix: %+v", moves)
 	}
 }
+
+// TestApplyNamingTemplateBacksfillsTheShowSidecar covers the other half of what
+// a media server needs. Correct filenames still leave it matching the folder
+// name against an online database to work out what the series is; the
+// series-level sidecar is what removes that guess.
+func TestApplyNamingTemplateBacksfillsTheShowSidecar(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	// A series library, which is the only kind a show-level sidecar applies to.
+	profileID, err := h.profiles.Create(ctx, domain.MediaProfile{
+		Name:               "Plex TV",
+		OutputPathTemplate: "{{ source_name }}/{{ title }}",
+		Kind:               domain.MediaVideo,
+		QualityFormat:      "bestvideo+bestaudio",
+		MetadataFormat:     domain.MetadataEpisode,
+		SponsorBlockMode:   domain.SponsorBlockOff,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	src, _ := h.svc.AddSource(ctx, validInput(profileID))
+
+	path := filepath.Join(h.mediaDir, "My Channel", "Something.mkv")
+	writeFile(t, path)
+	h.media.Upsert(ctx, domain.Media{
+		SourceID: src.ID, ExternalID: "s1", Status: domain.MediaDownloaded, FilePath: path,
+		Metadata: domain.MediaMetadata{Title: "Something", UploadDate: h.now},
+	})
+
+	if _, err := h.svc.ApplyNamingTemplate(ctx, src.ID); err != nil {
+		t.Fatalf("ApplyNamingTemplate: %v", err)
+	}
+
+	if h.metadata.showCalls != 1 {
+		t.Fatalf("show sidecar writes = %d, want 1", h.metadata.showCalls)
+	}
+	want := filepath.Join(h.mediaDir, "My Channel")
+	if h.metadata.lastShowDir != want {
+		t.Errorf("show sidecar written to %q, want the channel root %q", h.metadata.lastShowDir, want)
+	}
+	if h.metadata.lastShowName != "My Channel" {
+		t.Errorf("show named %q, want the source name", h.metadata.lastShowName)
+	}
+}
+
+// TestShowDirIsTheChannelFolderNotTheSeasonFolder pins where the sidecar goes. A
+// media server looks for it at the series root; one written into "Season 2026"
+// is simply never read.
+func TestShowDirIsTheChannelFolderNotTheSeasonFolder(t *testing.T) {
+	h := newHarness(t)
+	got, ok := h.svc.showDirFor(filepath.Join(h.mediaDir, "Chan", "Season 2026", "s2026e010101 - X.mkv"))
+	if !ok {
+		t.Fatal("no show directory resolved for a normal channel/season layout")
+	}
+	if want := filepath.Join(h.mediaDir, "Chan"); got != want {
+		t.Errorf("show dir = %q, want %q", got, want)
+	}
+}
+
+// TestShowDirRejectsAFlatLayout: with the file sitting directly in the media
+// root there is no series folder, and writing tvshow.nfo there would claim the
+// whole library is one show.
+func TestShowDirRejectsAFlatLayout(t *testing.T) {
+	h := newHarness(t)
+	if dir, ok := h.svc.showDirFor(filepath.Join(h.mediaDir, "loose.mkv")); ok {
+		t.Errorf("resolved a show directory %q for a file in the media root", dir)
+	}
+}
+
+// TestApplyNamingTemplateRefreshesEveryEpisodeSidecar covers the sidecars of
+// files that were already correctly named. Those were written by an older
+// version without the season and episode elements a media server needs, and
+// nothing else would ever rewrite them.
+func TestApplyNamingTemplateRefreshesEveryEpisodeSidecar(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	profileID := h.seedProfile(t)
+	src, _ := h.svc.AddSource(ctx, validInput(profileID))
+
+	for _, title := range []string{"Already Right", "Also Fine"} {
+		path := filepath.Join(h.mediaDir, "My Channel", title+".mkv")
+		writeFile(t, path)
+		h.media.Upsert(ctx, domain.Media{
+			SourceID: src.ID, ExternalID: title, Status: domain.MediaDownloaded, FilePath: path,
+			Metadata: domain.MediaMetadata{Title: title, UploadDate: h.now},
+		})
+	}
+
+	if _, err := h.svc.ApplyNamingTemplate(ctx, src.ID); err != nil {
+		t.Fatalf("ApplyNamingTemplate: %v", err)
+	}
+	if h.metadata.calls != 2 {
+		t.Errorf("sidecar writes = %d, want 2 (one per downloaded item)", h.metadata.calls)
+	}
+}

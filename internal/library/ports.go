@@ -75,6 +75,10 @@ type TaskEnqueuer interface {
 // metadata package.
 type MetadataWriter interface {
 	WriteFor(ctx context.Context, mediaFilePath string, media domain.Media, sourceName string, format domain.MetadataFormat) error
+	// WriteShow writes the series-level sidecar at a channel folder's root, which
+	// is what lets a media server identify the series from local data instead of
+	// matching the folder name against an online database.
+	WriteShow(ctx context.Context, showDir, name, url string) error
 }
 
 // FeedWriter (re)builds a source's RSS/podcast feed from its downloaded items.
