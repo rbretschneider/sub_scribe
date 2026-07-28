@@ -23,6 +23,9 @@ type RenameReport struct {
 	// their destination. Overwriting it could destroy a file, so they are
 	// reported instead.
 	Blocked int
+	// OrphansRemoved is how many metadata files were deleted because the video
+	// they described is no longer there.
+	OrphansRemoved int
 }
 
 // ApplyNamingTemplate moves a source's already-downloaded files to the paths its
@@ -83,6 +86,14 @@ func (s *Service) ApplyNamingTemplate(ctx context.Context, sourceID int64) (Rena
 
 	s.pruneEmptyDirs(ctx, vacated)
 	s.backfillShowMetadata(ctx, sourceID)
+
+	// Last, once every file is where it belongs: anything still describing a
+	// video that is not there describes nothing.
+	orphans, err := s.sweepOrphanedSidecars(ctx, sourceID)
+	if err != nil {
+		return report, err
+	}
+	report.OrphansRemoved = orphans
 	return report, nil
 }
 

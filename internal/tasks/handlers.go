@@ -94,7 +94,8 @@ func RenameHandler(renamer library.Renamer) jobs.HandlerFunc {
 		}
 		slog.InfoContext(ctx, "applied the naming template to existing files",
 			"source_id", *task.SourceID,
-			"checked", report.Checked, "renamed", report.Renamed, "blocked", report.Blocked)
+			"checked", report.Checked, "renamed", report.Renamed, "blocked", report.Blocked,
+			"orphans_removed", report.OrphansRemoved)
 		return nil
 	}
 }

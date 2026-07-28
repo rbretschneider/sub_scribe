@@ -71,34 +71,61 @@ the **Jobs** screen shows it working.
 Files are named the way media servers expect, for example:
 
 ```
+Computerphile/tvshow.nfo
 Computerphile/Season 2026/s2026e071601 - GPS Hidden Messages.mkv
 Computerphile/Season 2026/s2026e071601 - GPS Hidden Messages.jpg
 Computerphile/Season 2026/s2026e071601 - GPS Hidden Messages.nfo
 ```
 
 `s2026e071601` is season-by-year, episode-by-upload-date, plus a two-digit index
-so two videos posted on the same day get distinct episode numbers. That token is
-what makes the layout work: a media server parses it and takes the title from the
-rest of the filename.
+so two videos posted on the same day get distinct episode numbers.
+
+`tvshow.nfo` names the series, and each episode's `.nfo` carries its title, plot,
+air date, runtime, and its season and episode numbers — taken from the filename,
+so the two can never disagree.
 
 ### Pointing a media server at it
 
-Add the media folder as a **TV Shows** library. Each channel becomes a show and
-each year a season.
+Add the media folder as a **TV Shows** library, ideally its own library rather
+than mixed in with real TV. Each channel becomes a show and each year a season.
 
-**Plex** needs one setting changed, or it will show invented titles like
-`Episode 04-22`:
+#### Plex
 
-- Library → *Edit* → **Advanced**
-- **Agent: Personal Media Shows**
+Set the library's agent to **Plex NFO Series**:
 
-That tells Plex to take titles from the filenames instead of trying to match your
-channel against its TV database. Note that **Plex does not read `.nfo` files** —
-it has no native NFO agent — so the sidecars are there for other servers and for
-the third-party XBMCnfo agent if you use it.
+- Library → *⋯* → **Manage Library** → **Edit** → **Advanced**
+- **Agent: Plex NFO Series**
+- Scanner: **Plex Series Scanner** (the default; leave it)
 
-**Jellyfin, Emby and Kodi** read the `.nfo` sidecars natively and need no extra
-configuration.
+This requires **Plex Media Server 1.43.1 or newer**, which is where Plex gained a
+native NFO agent. It reads the sidecars above, so you get the real video titles,
+descriptions, and upload dates.
+
+Change the agent before doing anything else, because the alternatives do not
+work and it is worth knowing why:
+
+- The **default online agent** matches your *folder name* against a TV database
+  and uses whatever comes back. A channel called "Channel 5 with Andrew
+  Callaghan" gets confidently identified as the 2011 anime *A-Channel*, complete
+  with its poster. No filename can prevent this — the agent never reads them.
+- **Personal Media Shows** does no online lookup, so it fixes that, but [Plex
+  documents](https://support.plex.tv/articles/200265256-naming-home-series-media/)
+  that it names episodes `Episode 1`, `Episode 2` … and that any additional
+  information in the filename is ignored. Correct season and episode numbers,
+  every title thrown away.
+
+After switching, run **Manage Library → Refresh All Metadata**. A plain scan only
+looks for new files; it will not revisit items the old agent already matched. If
+a show keeps its wrong identity, open it and use *⋯* → **Fix Match** →
+**Unmatch**, then refresh again.
+
+One trade-off: no agent fetches artwork for you, so channels show a placeholder
+poster. Drop a `poster.jpg` in a channel's folder to give it one. Episode
+thumbnails work already — those are the `.jpg` sidecars.
+
+#### Jellyfin, Emby and Kodi
+
+Nothing to configure. They read `.nfo` sidecars natively.
 
 ### Upgrading
 
@@ -109,6 +136,19 @@ docker pull ghcr.io/rbretschneider/sub_scribe:latest   # single container
 
 Schema migrations run automatically at startup, and anything already on disk is
 re-adopted, so upgrading never loses your archive.
+
+Metadata sidecars are also brought up to date in the background on every start,
+so an archive downloaded by an older version gets whatever the current one
+writes without being re-downloaded. Files are only rewritten when their content
+would actually change. When that happens, tell your media server to refresh its
+metadata — it has no reason to re-read a file it already scanned. Watch for:
+
+```
+INFO brought metadata sidecars up to date files=11
+```
+
+Media files themselves are never moved without being asked; that is what the
+**Fix file names** button on a source is for.
 
 ### Building it yourself
 
@@ -267,13 +307,35 @@ A media profile's output template maps each video's metadata to a path. The
 default is:
 
 ```
-{{ source_name }}/Season {{ upload_year }}/{{ source_name }} - {{ upload_date }} - {{ title }} [{{ id }}]
+{{ source_name }}/Season {{ upload_year }}/{{ season_episode }} - {{ title }}
 ```
 
-Available variables: `source_name`, `uploader`, `title`, `id`, `upload_date`,
-`upload_year`, `season`, `episode`. Every value is sanitized for cross-platform
-filesystem safety (Windows/SMB-safe), so titles like `AC/DC` never create stray
-folders and templates can never escape the media root.
+| Variable | Example | Notes |
+|---|---|---|
+| `source_name` | `Computerphile` | The channel, as named in sub_scribe |
+| `uploader` | `Computerphile` | As reported by the provider |
+| `title` | `GPS Hidden Messages` | |
+| `id` | `2Q6OvYjOJi0` | The provider's video id |
+| `upload_date` | `2026-07-16` | |
+| `upload_year` | `2026` | |
+| `season_episode` | `s2026e071601` | Season by year, episode by date + same-day index |
+| `season` | `S2026` | |
+| `episode` | `20260716` | |
+| `upload_mmdd` | `0716` | |
+
+Keep `season_episode` in the filename unless you have a specific reason not to.
+It is what a media server parses to place an episode, and a layout without it
+(a plain date, say) leaves the server guessing — which is where invented titles
+like `Episode 04-22` come from.
+
+If you change the template later, existing files stay where they are. The source
+page has a **Fix file names** button that moves them, with their sidecars, into
+the layout the current template describes. It never overwrites an existing file:
+anything whose destination is occupied is reported rather than replaced.
+
+Every value is sanitized for cross-platform filesystem safety (Windows/SMB-safe),
+so titles like `AC/DC` never create stray folders and templates can never escape
+the media root.
 
 ## Features
 
@@ -282,7 +344,8 @@ folders and templates can never escape the media root.
 - Video or audio-only downloads
 - Per-source rules: upload-date cutoff, title regex filter, Shorts and
   livestream inclusion/exclusion
-- Plex/Jellyfin/Kodi `.nfo` metadata sidecars
+- Plex/Jellyfin/Kodi `.nfo` metadata sidecars, per episode and per series
+  (`tvshow.nfo`), kept up to date automatically as sub_scribe changes
 - RSS/podcast feed generation per source
 - SponsorBlock (remove or mark segments)
 - Retention: auto-delete media older than a configured age
