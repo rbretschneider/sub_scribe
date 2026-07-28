@@ -92,6 +92,9 @@ type ReconcileReport struct {
 	// ExistingFilesAdopted counts media whose file was found on disk but was not
 	// recorded as downloaded.
 	ExistingFilesAdopted int
+	// MovedFilesRepaired counts items whose recorded path no longer pointed at the
+	// file and was corrected to where the file actually is.
+	MovedFilesRepaired int
 }
 
 // IsEmpty reports whether recovery found nothing to fix, which is the normal
@@ -99,5 +102,5 @@ type ReconcileReport struct {
 func (r ReconcileReport) IsEmpty() bool {
 	return r.OrphanTasksRemoved == 0 && r.RunningTasksRequeued == 0 &&
 		r.InterruptedDownloads == 0 && r.StrandedMediaQueued == 0 &&
-		r.ExistingFilesAdopted == 0
+		r.ExistingFilesAdopted == 0 && r.MovedFilesRepaired == 0
 }

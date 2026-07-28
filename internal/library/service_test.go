@@ -96,6 +96,14 @@ func (r *fakeMediaRepo) Upsert(_ context.Context, media domain.Media) (int64, er
 	for id, existing := range r.items {
 		if existing.SourceID == media.SourceID && existing.ExternalID == media.ExternalID {
 			media.ID = id
+			// Mirror the store: the conflict clause refreshes indexed metadata and
+			// leaves download state alone, so re-indexing cannot wipe out the record
+			// of a file already on disk. A fake that overwrote these would make an
+			// Upsert look like it had recorded a move that the real store ignores.
+			media.FilePath = existing.FilePath
+			media.FileSize = existing.FileSize
+			media.Status = existing.Status
+			media.DownloadedAt = existing.DownloadedAt
 			r.items[id] = media
 			return id, nil
 		}
@@ -618,15 +626,16 @@ type fakeMetadataWriter struct {
 	calls        int
 	lastFormat   domain.MetadataFormat
 	showCalls    int
+	unchanged    bool
 	lastShowDir  string
 	lastShowName string
 	err          error
 }
 
-func (w *fakeMetadataWriter) WriteFor(_ context.Context, _ string, _ domain.Media, _ string, format domain.MetadataFormat) error {
+func (w *fakeMetadataWriter) WriteFor(_ context.Context, _ string, _ domain.Media, _ string, format domain.MetadataFormat) (bool, error) {
 	w.calls++
 	w.lastFormat = format
-	return w.err
+	return !w.unchanged, w.err
 }
 
 // fakeFeedWriter records feed writes.
@@ -1350,9 +1359,20 @@ func TestPacingDoesNotApplyToItemsBeingDiscarded(t *testing.T) {
 	}
 }
 
-func (w *fakeMetadataWriter) WriteShow(_ context.Context, showDir, name, _ string) error {
+func (w *fakeMetadataWriter) WriteShow(_ context.Context, showDir, name, _ string) (bool, error) {
 	w.showCalls++
 	w.lastShowDir = showDir
 	w.lastShowName = name
+	return true, nil
+}
+
+func (r *fakeMediaRepo) SetFilePath(_ context.Context, id int64, filePath string, now time.Time) error {
+	m, ok := r.items[id]
+	if !ok {
+		return errors.New("media not found")
+	}
+	m.FilePath = filePath
+	m.UpdatedAt = now
+	r.items[id] = m
 	return nil
 }

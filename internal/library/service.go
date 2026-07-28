@@ -897,7 +897,7 @@ func (s *Service) recordDownloadFailure(ctx context.Context, mediaID int64, medi
 // successful download: sidecar metadata, feed regeneration, and notification.
 // Failures here are logged but do not fail the download, which already succeeded.
 func (s *Service) finalizeDownload(ctx context.Context, source domain.Source, media domain.Media, filePath string, profile domain.MediaProfile) {
-	if err := s.deps.Metadata.WriteFor(ctx, filePath, media, source.Name, profile.MetadataFormat); err != nil {
+	if _, err := s.deps.Metadata.WriteFor(ctx, filePath, media, source.Name, profile.MetadataFormat); err != nil {
 		log.Printf("library: write metadata for %q: %v", filePath, err)
 	}
 	s.writeShowMetadata(ctx, source, filePath, profile)
@@ -933,7 +933,7 @@ func (s *Service) writeShowMetadata(ctx context.Context, source domain.Source, f
 	if !ok {
 		return
 	}
-	if err := s.deps.Metadata.WriteShow(ctx, showDir, source.Name, source.URL); err != nil {
+	if _, err := s.deps.Metadata.WriteShow(ctx, showDir, source.Name, source.URL); err != nil {
 		log.Printf("library: write show metadata in %q: %v", showDir, err)
 	}
 }

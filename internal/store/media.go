@@ -63,6 +63,18 @@ func (r *MediaRepo) Upsert(ctx context.Context, media domain.Media) (int64, erro
 	return id, nil
 }
 
+// SetFilePath records a media file's new location after it has been moved on
+// disk, leaving status, size, and download history untouched.
+func (r *MediaRepo) SetFilePath(ctx context.Context, id int64, filePath string, now time.Time) error {
+	if _, err := r.sql.ExecContext(ctx,
+		`UPDATE media SET file_path = ?, updated_at = ? WHERE id = ?`,
+		filePath, now.Unix(), id,
+	); err != nil {
+		return fmt.Errorf("store: set file path for media %d: %w", id, err)
+	}
+	return nil
+}
+
 // Get returns the media item with the given id.
 func (r *MediaRepo) Get(ctx context.Context, id int64) (domain.Media, error) {
 	row := r.sql.QueryRowContext(ctx,

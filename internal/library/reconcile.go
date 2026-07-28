@@ -49,6 +49,12 @@ func (s *Service) Reconcile(ctx context.Context) (ReconcileReport, error) {
 	}
 	report.ExistingFilesAdopted = adopted
 
+	moved, err := s.repairMovedFiles(ctx)
+	if err != nil {
+		return report, err
+	}
+	report.MovedFilesRepaired = moved
+
 	stranded, err := s.requeueStrandedMedia(ctx)
 	if err != nil {
 		return report, err
@@ -141,5 +147,6 @@ func (s *Service) logReconcile(ctx context.Context, report ReconcileReport) {
 		"running_tasks_requeued", report.RunningTasksRequeued,
 		"interrupted_downloads_reset", report.InterruptedDownloads,
 		"existing_files_adopted", report.ExistingFilesAdopted,
-		"stranded_media_queued", report.StrandedMediaQueued)
+		"stranded_media_queued", report.StrandedMediaQueued,
+		"moved_files_repaired", report.MovedFilesRepaired)
 }

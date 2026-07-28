@@ -36,6 +36,11 @@ type MediaRepo interface {
 	ListByStatus(ctx context.Context, status domain.MediaStatus, limit int) ([]domain.Media, error)
 	SetStatus(ctx context.Context, id int64, status domain.MediaStatus, now time.Time) error
 	MarkDownloaded(ctx context.Context, id int64, filePath string, size int64, now time.Time) error
+	// SetFilePath records that an item's file has moved, without disturbing its
+	// status or download history. Upsert deliberately does not update the path —
+	// it exists for re-indexing, which must never clobber download state — so
+	// moving a file needs its own narrow operation.
+	SetFilePath(ctx context.Context, id int64, filePath string, now time.Time) error
 	SetError(ctx context.Context, id int64, status domain.MediaStatus, cause string, now time.Time) error
 
 	// CountsByStatus returns the number of media items in each status.
@@ -73,12 +78,16 @@ type TaskEnqueuer interface {
 // MetadataWriter writes a sidecar metadata file (e.g. Kodi/Jellyfin .nfo) next to
 // a downloaded media file, in the layout selected by format. Implemented by the
 // metadata package.
+// Both methods report whether the file's content actually changed. Rewriting a
+// sidecar that is already correct restamps it, which a watching media server
+// reads as "re-examine this" — so a pass over the archive needs to know the
+// difference between having written and having changed something.
 type MetadataWriter interface {
-	WriteFor(ctx context.Context, mediaFilePath string, media domain.Media, sourceName string, format domain.MetadataFormat) error
+	WriteFor(ctx context.Context, mediaFilePath string, media domain.Media, sourceName string, format domain.MetadataFormat) (changed bool, err error)
 	// WriteShow writes the series-level sidecar at a channel folder's root, which
 	// is what lets a media server identify the series from local data instead of
 	// matching the folder name against an online database.
-	WriteShow(ctx context.Context, showDir, name, url string) error
+	WriteShow(ctx context.Context, showDir, name, url string) (changed bool, err error)
 }
 
 // FeedWriter (re)builds a source's RSS/podcast feed from its downloaded items.

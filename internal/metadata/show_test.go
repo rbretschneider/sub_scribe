@@ -103,7 +103,7 @@ func TestWriteShowCreatesTvshowNFOAtTheChannelRoot(t *testing.T) {
 	dir := t.TempDir()
 	writer := NewWriter()
 
-	if err := writer.WriteShow(context.Background(), dir, "Chan", "https://example.com/@chan"); err != nil {
+	if _, err := writer.WriteShow(context.Background(), dir, "Chan", "https://example.com/@chan"); err != nil {
 		t.Fatalf("WriteShow: %v", err)
 	}
 
@@ -125,7 +125,7 @@ func TestWriteShowLeavesUnchangedFileAlone(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(dir, "tvshow.nfo")
 
-	if err := writer.WriteShow(ctx, dir, "Chan", "https://example.com/@chan"); err != nil {
+	if _, err := writer.WriteShow(ctx, dir, "Chan", "https://example.com/@chan"); err != nil {
 		t.Fatalf("WriteShow: %v", err)
 	}
 	first, err := os.Stat(path)
@@ -133,7 +133,7 @@ func TestWriteShowLeavesUnchangedFileAlone(t *testing.T) {
 		t.Fatalf("stat: %v", err)
 	}
 
-	if err := writer.WriteShow(ctx, dir, "Chan", "https://example.com/@chan"); err != nil {
+	if _, err := writer.WriteShow(ctx, dir, "Chan", "https://example.com/@chan"); err != nil {
 		t.Fatalf("WriteShow (second): %v", err)
 	}
 	second, err := os.Stat(path)
@@ -150,10 +150,10 @@ func TestWriteShowUpdatesWhenTheNameChanges(t *testing.T) {
 	writer := NewWriter()
 	ctx := context.Background()
 
-	if err := writer.WriteShow(ctx, dir, "Old Name", "https://example.com/@chan"); err != nil {
+	if _, err := writer.WriteShow(ctx, dir, "Old Name", "https://example.com/@chan"); err != nil {
 		t.Fatalf("WriteShow: %v", err)
 	}
-	if err := writer.WriteShow(ctx, dir, "New Name", "https://example.com/@chan"); err != nil {
+	if _, err := writer.WriteShow(ctx, dir, "New Name", "https://example.com/@chan"); err != nil {
 		t.Fatalf("WriteShow (renamed): %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestWriteForTakesNumberingFromTheFileName(t *testing.T) {
 		t.Fatalf("write media: %v", err)
 	}
 
-	if err := NewWriter().WriteFor(context.Background(), mediaPath, sampleMedia(), "Chan", ""); err != nil {
+	if _, err := NewWriter().WriteFor(context.Background(), mediaPath, sampleMedia(), "Chan", ""); err != nil {
 		t.Fatalf("WriteFor: %v", err)
 	}
 

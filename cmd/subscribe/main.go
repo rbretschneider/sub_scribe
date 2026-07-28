@@ -190,6 +190,32 @@ func downloadPacerFor(cfg config.Config) *pacing.Pacer {
 	return pacing.New(pacing.Jittered(cfg.Throttle.MinDownloadInterval, cfg.Throttle.MaxDownloadInterval))
 }
 
+// refreshSidecars brings the metadata files in the archive up to date with what
+// this version writes, in the background.
+//
+// It runs on every start rather than on request because the failure it fixes is
+// invisible: an archive downloaded by an older version has sidecars missing
+// fields the media server needs, and nothing about it looks wrong — the files
+// play, they are named correctly, the server simply shows the wrong titles.
+// Expecting the user to notice that and find a button is not a plan.
+//
+// In the background, because it reads every sidecar to find out whether anything
+// changed, and holding the UI closed for that on a large archive would be a
+// worse bug than the one being fixed.
+func refreshSidecars(ctx context.Context, svc *library.Service, logger *slog.Logger) {
+	changed, err := svc.RefreshSidecars(ctx)
+	if err != nil {
+		logger.Error("refreshing metadata sidecars failed", "error", err)
+		return
+	}
+	if changed == 0 {
+		return // the normal case: nothing to say
+	}
+	logger.Info("brought metadata sidecars up to date",
+		"files", changed,
+		"note", "media servers need a metadata refresh to pick these up")
+}
+
 // rateLimitLabel renders an unset bandwidth cap as a word rather than an empty
 // string, so the startup line reads as a statement either way.
 func rateLimitLabel(limit string) string {
@@ -267,6 +293,7 @@ func serve(cfg config.Config, db *store.DB, svc *library.Service, clock jobs.Clo
 
 	go pool.Run(ctx)
 	go sched.Run(ctx)
+	go refreshSidecars(ctx, svc, logger)
 
 	server := &http.Server{Addr: ":" + strconv.Itoa(cfg.Port), Handler: handler}
 	go func() {

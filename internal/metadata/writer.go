@@ -32,22 +32,36 @@ func NewWriter() *Writer {
 // WriteFor builds the NFO for media in the requested format and writes it beside
 // mediaFilePath, replacing that path's extension with ".nfo". sourceName is
 // recorded as the studio. The context is honoured before performing the write.
-func (w *Writer) WriteFor(ctx context.Context, mediaFilePath string, media domain.Media, sourceName string, format domain.MetadataFormat) error {
+func (w *Writer) WriteFor(ctx context.Context, mediaFilePath string, media domain.Media, sourceName string, format domain.MetadataFormat) (bool, error) {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("write nfo for %q: %w", mediaFilePath, err)
+		return false, fmt.Errorf("write nfo for %q: %w", mediaFilePath, err)
 	}
 	// The numbering comes from the file name so the two can never contradict
 	// each other; when the name carries no token, the NFO simply omits it.
 	numbering, _ := ParseSeasonEpisode(mediaFilePath)
 	body, err := BuildNFO(media, sourceName, format, numbering)
 	if err != nil {
-		return fmt.Errorf("write nfo for %q: %w", mediaFilePath, err)
+		return false, fmt.Errorf("write nfo for %q: %w", mediaFilePath, err)
 	}
 	nfoPath := nfoPathFor(mediaFilePath)
-	if err := os.WriteFile(nfoPath, body, nfoFileMode); err != nil {
-		return fmt.Errorf("write nfo to %q: %w", nfoPath, err)
+	if unchanged(nfoPath, body) {
+		return false, nil
 	}
-	return nil
+	if err := os.WriteFile(nfoPath, body, nfoFileMode); err != nil {
+		return false, fmt.Errorf("write nfo to %q: %w", nfoPath, err)
+	}
+	return true, nil
+}
+
+// unchanged reports whether the file already holds exactly these bytes.
+//
+// Rewriting identical content is not free: it restamps the file, and a media
+// server watching the library reads that as "this changed, re-examine it". A
+// pass over the whole archive would then hand the server the whole archive to
+// re-scan, every time.
+func unchanged(path string, body []byte) bool {
+	existing, err := os.ReadFile(path)
+	return err == nil && bytes.Equal(existing, body)
 }
 
 // showNFOName is the series-level file media servers look for at a show's root.
@@ -59,25 +73,25 @@ const showNFOName = "tvshow.nfo"
 // It rewrites the file only when the content would change. The file is tiny, but
 // touching it on every download would restamp its modification time and invite
 // the media server to rescan the series each time.
-func (w *Writer) WriteShow(ctx context.Context, showDir, name, url string) error {
+func (w *Writer) WriteShow(ctx context.Context, showDir, name, url string) (bool, error) {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("write show nfo in %q: %w", showDir, err)
+		return false, fmt.Errorf("write show nfo in %q: %w", showDir, err)
 	}
 	body, err := BuildShowNFO(name, url)
 	if err != nil {
-		return fmt.Errorf("write show nfo in %q: %w", showDir, err)
+		return false, fmt.Errorf("write show nfo in %q: %w", showDir, err)
 	}
 	path := filepath.Join(showDir, showNFOName)
-	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, body) {
-		return nil
+	if unchanged(path, body) {
+		return false, nil
 	}
 	if err := os.MkdirAll(showDir, showDirMode); err != nil {
-		return fmt.Errorf("create show directory %q: %w", showDir, err)
+		return false, fmt.Errorf("create show directory %q: %w", showDir, err)
 	}
 	if err := os.WriteFile(path, body, nfoFileMode); err != nil {
-		return fmt.Errorf("write show nfo to %q: %w", path, err)
+		return false, fmt.Errorf("write show nfo to %q: %w", path, err)
 	}
-	return nil
+	return true, nil
 }
 
 // showDirMode is the permission mode for a created show directory.

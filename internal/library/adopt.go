@@ -75,6 +75,50 @@ func (s *Service) adoptOne(ctx context.Context, resolver *pathResolver, media do
 	return true, nil
 }
 
+// repairMovedFiles re-points items whose recorded file is no longer where the
+// database says it is, returning how many were corrected.
+//
+// A path can go stale for reasons that have nothing to do with a bug — a library
+// reorganised by hand, a restore that landed somewhere new — and once it is
+// stale everything downstream aims at the wrong place: metadata sidecars get
+// written beside nothing, and the file that does exist is left undescribed.
+//
+// An item whose file cannot be found anywhere is deliberately left alone. The
+// obvious alternative, marking it for download again, is far too dangerous: a
+// media volume that failed to mount makes every file in the archive look
+// missing, and the app would respond by re-downloading the entire library.
+func (s *Service) repairMovedFiles(ctx context.Context) (int, error) {
+	items, err := s.deps.Media.ListByStatus(ctx, domain.MediaDownloaded, 0)
+	if err != nil {
+		return 0, fmt.Errorf("list downloaded media: %w", err)
+	}
+
+	resolver := s.newPathResolver()
+	repaired := 0
+	for _, media := range items {
+		if media.FilePath != "" {
+			if _, err := os.Stat(media.FilePath); err == nil {
+				continue // where it should be
+			}
+		}
+		base, ok := resolver.basePathFor(ctx, media)
+		if !ok {
+			continue
+		}
+		found, ok := resolver.dirs.find(base)
+		if !ok {
+			continue
+		}
+		if err := s.deps.Media.SetFilePath(ctx, media.ID, found, s.deps.Clock.Now()); err != nil {
+			return repaired, fmt.Errorf("repair path for media %d: %w", media.ID, err)
+		}
+		slog.InfoContext(ctx, "re-pointed a media file that had moved",
+			"media_id", media.ID, "was", media.FilePath, "now", found)
+		repaired++
+	}
+	return repaired, nil
+}
+
 // deleteSourceFiles removes the media files a source has downloaded, returning
 // how many were deleted. Only paths sub_scribe recorded are touched — it never
 // removes a directory wholesale — so files it did not put there are left alone.

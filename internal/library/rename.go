@@ -97,7 +97,7 @@ func (s *Service) refreshEpisodeMetadata(ctx context.Context, sourceID int64, re
 	if !ok {
 		return
 	}
-	if err := s.deps.Metadata.WriteFor(ctx, at, media, source.Name, profile.MetadataFormat); err != nil {
+	if _, err := s.deps.Metadata.WriteFor(ctx, at, media, source.Name, profile.MetadataFormat); err != nil {
 		log.Printf("library: refresh metadata for %q: %v", at, err)
 	}
 }
@@ -171,8 +171,10 @@ func (s *Service) moveMediaFile(ctx context.Context, media domain.Media, want st
 		return false, fmt.Errorf("rename media %d: the media file itself did not move", media.ID)
 	}
 
-	media.UpdatedAt = s.deps.Clock.Now()
-	if _, err := s.deps.Media.Upsert(ctx, media); err != nil {
+	// Recorded with the narrow operation, not Upsert: Upsert's conflict clause
+	// refreshes indexed metadata and deliberately leaves file_path alone, so
+	// using it here moved the file on disk and told the database nothing.
+	if err := s.deps.Media.SetFilePath(ctx, media.ID, want, s.deps.Clock.Now()); err != nil {
 		return false, fmt.Errorf("record renamed path for media %d: %w", media.ID, err)
 	}
 	slog.InfoContext(ctx, "renamed to match the naming template",
