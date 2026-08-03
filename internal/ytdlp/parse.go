@@ -71,6 +71,12 @@ const (
 	flagPaths            = "--paths"
 	flagNoPlaylist       = "--no-playlist"
 	flagSkipDownload     = "--skip-download"
+	flagDumpSingleJSON   = "--dump-single-json"
+	// flagPlaylistItems selects which items of a collection to process;
+	// noPlaylistItems asks for a range that cannot match, which is how a
+	// collection's own details are fetched without walking its contents.
+	flagPlaylistItems = "--playlist-items"
+	noPlaylistItems   = "0"
 	// flagBreakOnReject stops the scan at the first item outside the date window,
 	// and flagLazyPlaylist makes entries stream out as they are found so that stop
 	// actually saves the rest of the walk.

@@ -76,7 +76,7 @@ func (s *Service) refreshSourceSidecars(ctx context.Context, source domain.Sourc
 		if !wroteShow {
 			// Every item shares one channel folder, so the series file is written
 			// once, from the first item that tells us where that folder is.
-			s.writeShowMetadata(ctx, source, media.FilePath, profile)
+			s.writeShowSidecars(ctx, source, media.FilePath, profile)
 			wroteShow = true
 		}
 	}

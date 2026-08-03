@@ -72,6 +72,9 @@ Files are named the way media servers expect, for example:
 
 ```
 Computerphile/tvshow.nfo
+Computerphile/poster.jpg
+Computerphile/fanart.jpg
+Computerphile/Season 2026/Season2026.jpg
 Computerphile/Season 2026/s2026e071601 - GPS Hidden Messages.mkv
 Computerphile/Season 2026/s2026e071601 - GPS Hidden Messages.jpg
 Computerphile/Season 2026/s2026e071601 - GPS Hidden Messages.nfo
@@ -83,6 +86,12 @@ so two videos posted on the same day get distinct episode numbers.
 `tvshow.nfo` names the series, and each episode's `.nfo` carries its title, plot,
 air date, runtime, and its season and episode numbers — taken from the filename,
 so the two can never disagree.
+
+`poster.jpg` is the channel's avatar and `fanart.jpg` its banner, downloaded once
+per channel. Each season folder gets the same poster under the name Plex reads
+(`Season2026.jpg`), because a media server shows a grey placeholder for any
+season it has no image for. Per-episode `.jpg` thumbnails come from the video
+itself.
 
 ### Pointing a media server at it
 
@@ -119,9 +128,12 @@ looks for new files; it will not revisit items the old agent already matched. If
 a show keeps its wrong identity, open it and use *⋯* → **Fix Match** →
 **Unmatch**, then refresh again.
 
-One trade-off: no agent fetches artwork for you, so channels show a placeholder
-poster. Drop a `poster.jpg` in a channel's folder to give it one. Episode
-thumbnails work already — those are the `.jpg` sidecars.
+The NFO agent does no online lookup at all, which is the point — but it also
+means nothing fetches artwork for you. sub_scribe writes the images itself
+(`poster.jpg`, `fanart.jpg`, and a per-season poster), and Plex prefers local
+image files over anything else, so shows and seasons get the channel's own
+branding instead of a grey placeholder. Existing libraries are backfilled at
+startup; the images appear in Plex after the next refresh.
 
 #### Jellyfin, Emby and Kodi
 
@@ -346,8 +358,11 @@ the media root.
   livestream inclusion/exclusion
 - Plex/Jellyfin/Kodi `.nfo` metadata sidecars, per episode and per series
   (`tvshow.nfo`), kept up to date automatically as sub_scribe changes
+- Channel artwork on disk — series poster, backdrop, and season posters — so a
+  local-metadata agent has pictures to show
 - RSS/podcast feed generation per source
-- SponsorBlock (remove or mark segments)
+- SponsorBlock (remove or mark segments), defaulting to sponsors only — removal
+  is permanent, so the broader categories are opt-in
 - Retention: auto-delete media older than a configured age
 - Apprise notifications
 - Live UI updates over Server-Sent Events (no page reloads)
@@ -393,6 +408,7 @@ internal/ytdlp       yt-dlp subprocess boundary (Runner interface)
 internal/naming      path template engine + cross-platform sanitization
 internal/cookies     cookie parsing + login health/expiry assessment
 internal/metadata    Kodi/Jellyfin .nfo writer
+internal/artwork     channel poster/backdrop/season art writer
 internal/feed        RSS/podcast feed generation
 internal/sponsorblock, internal/notify, internal/events, internal/config, internal/web
 ```

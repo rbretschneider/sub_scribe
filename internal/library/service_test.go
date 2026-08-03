@@ -573,6 +573,20 @@ type fakeRunner struct {
 	metadata      ytdlp.IndexEntry
 	metadataErr   error
 	metadataCalls int
+
+	// artwork is returned by Artwork, standing in for the channel avatar and
+	// banner the provider publishes for the collection as a whole.
+	artwork      domain.ChannelArtwork
+	artworkErr   error
+	artworkCalls int
+}
+
+func (r *fakeRunner) Artwork(_ context.Context, _, _ string) (domain.ChannelArtwork, error) {
+	r.artworkCalls++
+	if r.artworkErr != nil {
+		return domain.ChannelArtwork{}, r.artworkErr
+	}
+	return r.artwork, nil
 }
 
 func (r *fakeRunner) Index(_ context.Context, _ string, opts ytdlp.IndexOptions) ([]ytdlp.IndexEntry, error) {
@@ -638,6 +652,28 @@ func (w *fakeMetadataWriter) WriteFor(_ context.Context, _ string, _ domain.Medi
 	return !w.unchanged, w.err
 }
 
+// fakeArtworkWriter records artwork writes and can report the show folder as
+// already having everything it needs, which is how a test states that no
+// provider call should follow.
+type fakeArtworkWriter struct {
+	satisfied bool
+	calls     int
+	lastDir   string
+	lastArt   domain.ChannelArtwork
+	err       error
+}
+
+func (w *fakeArtworkWriter) NeedsArt(_ string) bool {
+	return !w.satisfied
+}
+
+func (w *fakeArtworkWriter) WriteArt(_ context.Context, showDir string, art domain.ChannelArtwork) (bool, error) {
+	w.calls++
+	w.lastDir = showDir
+	w.lastArt = art
+	return w.err == nil, w.err
+}
+
 // fakeFeedWriter records feed writes.
 type fakeFeedWriter struct {
 	calls     int
@@ -692,6 +728,7 @@ type harness struct {
 	queue    *fakeQueueMaintain
 	runner   *fakeRunner
 	metadata *fakeMetadataWriter
+	artwork  *fakeArtworkWriter
 	feed     *fakeFeedWriter
 	notifier *fakeNotifier
 	hook     *fakeHook
@@ -719,6 +756,7 @@ func newHarness(t *testing.T) *harness {
 		queue:    newFakeQueueMaintain(),
 		runner:   &fakeRunner{},
 		metadata: &fakeMetadataWriter{},
+		artwork:  &fakeArtworkWriter{},
 		feed:     &fakeFeedWriter{},
 		notifier: &fakeNotifier{},
 		hook:     &fakeHook{},
@@ -744,6 +782,7 @@ func (h *harness) rebuildService() {
 		Runner:       h.runner,
 		Naming:       naming.NewRenderer(),
 		Metadata:     h.metadata,
+		Artwork:      h.artwork,
 		Feed:         h.feed,
 		Notifier:     h.notifier,
 		SponsorBlock: fakeSponsorBlock{args: []string{"--sponsorblock-remove", "sponsor"}},

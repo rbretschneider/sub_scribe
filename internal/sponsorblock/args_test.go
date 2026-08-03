@@ -8,8 +8,6 @@ import (
 )
 
 func TestBuilderArgs(t *testing.T) {
-	defaultCats := "sponsor,selfpromo,interaction"
-
 	tests := []struct {
 		name       string
 		mode       domain.SponsorBlockMode
@@ -49,16 +47,19 @@ func TestBuilderArgs(t *testing.T) {
 			want: []string{"--sponsorblock-mark", "outro,filler"},
 		},
 		{
-			name:       "remove empty categories falls back to defaults",
+			// Naming no categories once meant "cut sponsor, self-promotion, and
+			// interaction", chosen by nobody and shown nowhere. Cutting is
+			// permanent, so silence has to mean silence.
+			name:       "remove with no categories cuts nothing",
 			mode:       domain.SponsorBlockRemove,
 			categories: nil,
-			want:       []string{"--sponsorblock-remove", defaultCats},
+			want:       nil,
 		},
 		{
-			name:       "mark empty slice falls back to defaults",
+			name:       "mark with an empty slice marks nothing",
 			mode:       domain.SponsorBlockMark,
 			categories: []domain.SponsorBlockCategory{},
-			want:       []string{"--sponsorblock-mark", defaultCats},
+			want:       nil,
 		},
 	}
 

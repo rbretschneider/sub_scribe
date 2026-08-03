@@ -48,6 +48,7 @@ type Deps struct {
 	Runner       ytdlp.Runner
 	Naming       *naming.Renderer
 	Metadata     MetadataWriter
+	Artwork      ArtworkWriter
 	Feed         FeedWriter
 	Notifier     Notifier
 	SponsorBlock SponsorBlockBuilder
@@ -900,7 +901,7 @@ func (s *Service) finalizeDownload(ctx context.Context, source domain.Source, me
 	if _, err := s.deps.Metadata.WriteFor(ctx, filePath, media, source.Name, profile.MetadataFormat); err != nil {
 		log.Printf("library: write metadata for %q: %v", filePath, err)
 	}
-	s.writeShowMetadata(ctx, source, filePath, profile)
+	s.writeShowSidecars(ctx, source, filePath, profile)
 
 	items, err := s.deps.Media.ListBySource(ctx, source.ID)
 	if err != nil {
@@ -918,14 +919,14 @@ func (s *Service) finalizeDownload(ctx context.Context, source domain.Source, me
 	}
 }
 
-// writeShowMetadata keeps the series-level sidecar at the channel folder's root
-// up to date, so a media server can identify the series from what is on disk.
+// writeShowSidecars keeps everything that describes the series as a whole up to
+// date at the channel folder's root: the metadata file and the artwork.
 //
 // Left to the folder name alone, a server matches it against an online database
 // and takes whatever comes back: "Channel 5 with Andrew Callaghan" came back as
 // the anime "A-Channel". Only a series library has any use for this, and only a
 // layout with a channel folder has anywhere to put it.
-func (s *Service) writeShowMetadata(ctx context.Context, source domain.Source, filePath string, profile domain.MediaProfile) {
+func (s *Service) writeShowSidecars(ctx context.Context, source domain.Source, filePath string, profile domain.MediaProfile) {
 	if profile.MetadataFormat == domain.MetadataMovie {
 		return
 	}
@@ -935,6 +936,29 @@ func (s *Service) writeShowMetadata(ctx context.Context, source domain.Source, f
 	}
 	if _, err := s.deps.Metadata.WriteShow(ctx, showDir, source.Name, source.URL); err != nil {
 		log.Printf("library: write show metadata in %q: %v", showDir, err)
+	}
+	s.writeShowArtwork(ctx, source, showDir)
+}
+
+// writeShowArtwork gives the show folder its poster, backdrop, and season
+// posters, fetching them from the provider only when they are not already there.
+//
+// Naming the series locally stops a media server from inventing one, but it also
+// stops it from fetching pictures: an agent reading local metadata does no online
+// lookup, so nothing supplies channel art unless sub_scribe puts it on disk. The
+// per-video thumbnails yt-dlp already writes cover the episodes; this covers the
+// show and its seasons, which would otherwise stay blank placeholders.
+func (s *Service) writeShowArtwork(ctx context.Context, source domain.Source, showDir string) {
+	if !s.deps.Artwork.NeedsArt(showDir) {
+		return
+	}
+	art, err := s.deps.Runner.Artwork(ctx, source.URL, s.cookieArgFor(source))
+	if err != nil {
+		log.Printf("library: fetch artwork for source %d: %v", source.ID, err)
+		return
+	}
+	if _, err := s.deps.Artwork.WriteArt(ctx, showDir, art); err != nil {
+		log.Printf("library: write artwork in %q: %v", showDir, err)
 	}
 }
 

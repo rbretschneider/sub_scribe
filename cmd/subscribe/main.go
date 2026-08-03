@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"sub_scribe/internal/applog"
+	"sub_scribe/internal/artwork"
 	"sub_scribe/internal/config"
 	"sub_scribe/internal/domain"
 	"sub_scribe/internal/events"
@@ -159,6 +160,7 @@ func buildService(cfg config.Config, db *store.DB, hub *events.Hub, clock jobs.C
 		DownloadPace: downloadPacerFor(cfg),
 		Naming:       naming.NewRenderer(),
 		Metadata:     metadata.NewWriter(),
+		Artwork:      artwork.NewWriter(nil),
 		Feed:         feed.NewWriter(cfg.FeedDir),
 		Notifier:     buildNotifier(cfg),
 		SponsorBlock: sponsorblock.NewBuilder(),
@@ -341,8 +343,13 @@ func seedDefaultProfile(ctx context.Context, db *store.DB, svc *library.Service,
 		EmbedThumbnail:     true,
 		WriteThumbnail:     true,
 		SponsorBlockMode:   domain.SponsorBlockRemove,
-		CreatedAt:          now,
-		UpdatedAt:          now,
+		// Sponsors only, and stated rather than implied. The adjacent categories
+		// are far more subjective — "self-promotion" covers a creator talking
+		// about their own work — and a removal cannot be undone without
+		// downloading the video again.
+		SponsorBlockCategories: []domain.SponsorBlockCategory{domain.SponsorBlockSponsor},
+		CreatedAt:              now,
+		UpdatedAt:              now,
 	}
 	if _, err := svc.CreateProfile(ctx, profile); err != nil {
 		return fmt.Errorf("seed default profile: %w", err)

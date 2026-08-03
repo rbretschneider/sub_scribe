@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -193,5 +194,89 @@ func TestReconcileLeavesGenuinelyMissingFilesAlone(t *testing.T) {
 	got, _ := h.media.Get(ctx, mediaID)
 	if got.Status != domain.MediaDownloaded || got.FilePath != recorded {
 		t.Errorf("a missing file was disturbed: status=%q path=%q", got.Status, got.FilePath)
+	}
+}
+
+// seedDownloadedEpisode records one downloaded episode under a channel folder,
+// which is the minimum a source needs before it has any show folder to describe.
+func seedDownloadedEpisode(t *testing.T, h *harness, sourceID int64) {
+	t.Helper()
+	path := filepath.Join(h.mediaDir, "My Channel", "Season 2026", "s2026e072401 - Ep.mkv")
+	writeFile(t, path)
+	if _, err := h.media.Upsert(context.Background(), domain.Media{
+		SourceID: sourceID, ExternalID: "a1", Status: domain.MediaDownloaded, FilePath: path,
+		Metadata: domain.MediaMetadata{Title: "Ep", UploadDate: h.now},
+	}); err != nil {
+		t.Fatalf("seed episode: %v", err)
+	}
+}
+
+// TestRefreshSidecarsBackfillsShowArtwork covers the other half of naming the
+// series locally: an agent reading local metadata does no online lookup, so
+// nothing fetches a channel's poster unless sub_scribe writes one.
+func TestRefreshSidecarsBackfillsShowArtwork(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	src, _ := h.svc.AddSource(ctx, validInput(seedEpisodeProfile(t, h)))
+	seedDownloadedEpisode(t, h, src.ID)
+	h.runner.artwork = domain.ChannelArtwork{PosterURL: "https://img/avatar"}
+
+	if _, err := h.svc.RefreshSidecars(ctx); err != nil {
+		t.Fatalf("RefreshSidecars: %v", err)
+	}
+
+	if h.artwork.calls != 1 {
+		t.Fatalf("artwork writes = %d, want 1", h.artwork.calls)
+	}
+	if want := filepath.Join(h.mediaDir, "My Channel"); h.artwork.lastDir != want {
+		t.Errorf("artwork written to %q, want the channel root %q", h.artwork.lastDir, want)
+	}
+	if h.artwork.lastArt.PosterURL != "https://img/avatar" {
+		t.Errorf("poster = %q, want the channel avatar", h.artwork.lastArt.PosterURL)
+	}
+}
+
+// TestRefreshSidecarsSkipsTheProviderWhenArtworkIsPresent is the cost guard.
+// This pass runs at every startup and after every download; asking the provider
+// for a poster that is already on disk would put a network call on both paths.
+func TestRefreshSidecarsSkipsTheProviderWhenArtworkIsPresent(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	src, _ := h.svc.AddSource(ctx, validInput(seedEpisodeProfile(t, h)))
+	seedDownloadedEpisode(t, h, src.ID)
+	h.artwork.satisfied = true
+
+	if _, err := h.svc.RefreshSidecars(ctx); err != nil {
+		t.Fatalf("RefreshSidecars: %v", err)
+	}
+
+	if h.runner.artworkCalls != 0 {
+		t.Errorf("provider artwork calls = %d, want 0 when the folder is complete", h.runner.artworkCalls)
+	}
+	if h.artwork.calls != 0 {
+		t.Errorf("artwork writes = %d, want 0 when the folder is complete", h.artwork.calls)
+	}
+}
+
+// TestRefreshSidecarsSurvivesAnArtworkFailure keeps a picture from costing the
+// user their metadata: artwork is a nicety, and a channel that will not serve
+// its avatar must not stop the series from being named.
+func TestRefreshSidecarsSurvivesAnArtworkFailure(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	src, _ := h.svc.AddSource(ctx, validInput(seedEpisodeProfile(t, h)))
+	seedDownloadedEpisode(t, h, src.ID)
+	h.runner.artworkErr = errors.New("provider refused")
+
+	changed, err := h.svc.RefreshSidecars(ctx)
+	if err != nil {
+		t.Fatalf("RefreshSidecars: %v", err)
+	}
+
+	if changed != 1 {
+		t.Errorf("sidecars refreshed = %d, want the metadata still written", changed)
+	}
+	if h.metadata.showCalls != 1 {
+		t.Errorf("show sidecar writes = %d, want 1 despite the artwork failure", h.metadata.showCalls)
 	}
 }

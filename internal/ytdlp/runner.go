@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"sub_scribe/internal/domain"
 )
 
 // ErrFilteredOut reports that yt-dlp skipped an item rather than downloading it —
@@ -125,4 +127,9 @@ type Runner interface {
 	// Download fetches a single item to opts.OutputPath, invoking onProgress as it
 	// proceeds. onProgress may be nil.
 	Download(ctx context.Context, url string, opts DownloadOptions, onProgress ProgressFunc) (DownloadResult, error)
+
+	// Artwork fetches the imagery a collection publishes for itself — a channel's
+	// avatar and banner — without enumerating its items. A collection that
+	// publishes none yields an empty value rather than an error.
+	Artwork(ctx context.Context, url, cookiesPath string) (domain.ChannelArtwork, error)
 }

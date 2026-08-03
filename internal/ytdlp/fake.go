@@ -1,6 +1,10 @@
 package ytdlp
 
-import "context"
+import (
+	"context"
+
+	"sub_scribe/internal/domain"
+)
 
 // FakeRunner is a test double for Runner. Each method delegates to its
 // corresponding func field, or returns a zero value when that field is nil, so
@@ -9,6 +13,7 @@ type FakeRunner struct {
 	IndexFunc    func(ctx context.Context, url string, opts IndexOptions) ([]IndexEntry, error)
 	MetadataFunc func(ctx context.Context, url, cookiesPath string) (IndexEntry, error)
 	DownloadFunc func(ctx context.Context, url string, opts DownloadOptions, onProgress ProgressFunc) (DownloadResult, error)
+	ArtworkFunc  func(ctx context.Context, url, cookiesPath string) (domain.ChannelArtwork, error)
 }
 
 var _ Runner = (*FakeRunner)(nil)
@@ -35,4 +40,12 @@ func (f *FakeRunner) Download(ctx context.Context, url string, opts DownloadOpti
 		return DownloadResult{}, nil
 	}
 	return f.DownloadFunc(ctx, url, opts, onProgress)
+}
+
+// Artwork delegates to ArtworkFunc, returning no artwork when it is nil.
+func (f *FakeRunner) Artwork(ctx context.Context, url, cookiesPath string) (domain.ChannelArtwork, error) {
+	if f.ArtworkFunc == nil {
+		return domain.ChannelArtwork{}, nil
+	}
+	return f.ArtworkFunc(ctx, url, cookiesPath)
 }

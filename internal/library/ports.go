@@ -90,6 +90,19 @@ type MetadataWriter interface {
 	WriteShow(ctx context.Context, showDir, name, url string) (changed bool, err error)
 }
 
+// ArtworkWriter saves a source's channel imagery into its show folder, under the
+// filenames a media server reads as the series poster, backdrop, and season
+// posters. Implemented by the artwork package.
+//
+// NeedsArt is part of the contract rather than an internal detail because it is
+// what keeps artwork off the network: the URLs cost a provider call to discover,
+// and there is no point making that call for a show whose images are already on
+// disk. The caller asks first, and only fetches URLs when the answer is yes.
+type ArtworkWriter interface {
+	NeedsArt(showDir string) bool
+	WriteArt(ctx context.Context, showDir string, art domain.ChannelArtwork) (changed bool, err error)
+}
+
 // FeedWriter (re)builds a source's RSS/podcast feed from its downloaded items.
 // Implemented by the feed package.
 type FeedWriter interface {

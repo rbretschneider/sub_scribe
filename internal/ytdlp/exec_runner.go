@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"sub_scribe/internal/domain"
 	"sub_scribe/internal/pacing"
 )
 
@@ -97,6 +98,23 @@ func (r *ExecRunner) Metadata(ctx context.Context, url, cookiesPath string) (Ind
 		return IndexEntry{}, fmt.Errorf("yt-dlp metadata %q: no entry returned", url)
 	}
 	return entries[0], nil
+}
+
+// Artwork fetches the collection's own imagery. It is a single cheap call: the
+// collection is resolved but none of its items are, so the cost does not grow
+// with the size of the channel.
+func (r *ExecRunner) Artwork(ctx context.Context, url, cookiesPath string) (domain.ChannelArtwork, error) {
+	if err := r.pacer.Wait(ctx); err != nil {
+		return domain.ChannelArtwork{}, fmt.Errorf("yt-dlp artwork %q: %w", url, err)
+	}
+	cmd := exec.CommandContext(ctx, r.binaryPath, buildArtworkArgs(url, cookiesPath, r.potProviderURL, r.throttle)...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return domain.ChannelArtwork{}, classifyError(fmt.Errorf("yt-dlp artwork %q: %w: %s", url, err, stderr.String()), stderr.String())
+	}
+	return parseArtwork(stdout.Bytes())
 }
 
 // scanIndexEntries parses each non-blank line of yt-dlp JSON output, skipping

@@ -193,6 +193,23 @@ var migrations = []migration{
 			WHERE output_path_template =
 				'{{ source_name }}/Season {{ upload_year }}/{{ source_name }} - {{ upload_date }} - {{ title }} [{{ id }}]'`,
 	},
+	{
+		version: 17,
+		name:    "sponsorblock_categories_are_explicit",
+		// An empty category list used to mean "cut sponsor, self-promotion, and
+		// interaction segments", while the profile screen showed nothing ticked.
+		// The builder no longer invents that set, so a profile left empty would
+		// silently stop cutting anything at all — the opposite surprise.
+		//
+		// Writing the one category worth cutting by default settles it in both
+		// directions: sponsors are still removed, the screen now says so, and the
+		// two subjective categories that could take a chunk of the actual episode
+		// are gone unless someone asks for them.
+		stmt: `UPDATE media_profiles
+			SET sponsorblock_categories = '["sponsor"]'
+			WHERE sponsorblock_mode != 'off'
+			  AND sponsorblock_categories IN ('[]', '', 'null')`,
+	},
 }
 
 // migrate applies every migration not yet recorded, each in its own transaction,

@@ -21,14 +21,6 @@ const (
 	categorySeparator = ","
 )
 
-// defaultCategories is the sensible fallback used when a profile enables
-// SponsorBlock but names no categories.
-var defaultCategories = []domain.SponsorBlockCategory{
-	domain.SponsorBlockSponsor,
-	domain.SponsorBlockSelfPromo,
-	domain.SponsorBlockInteraction,
-}
-
 // Builder turns SponsorBlock settings into yt-dlp arguments. It holds no state.
 type Builder struct{}
 
@@ -38,11 +30,18 @@ func NewBuilder() *Builder {
 }
 
 // Args returns the yt-dlp arguments for the given SponsorBlock mode and
-// categories. It returns nil when SponsorBlock is off. When no categories are
-// supplied a sensible default set is used.
+// categories. It returns nil when SponsorBlock is off, and nil when the profile
+// names no categories.
+//
+// An empty list used to mean "use a built-in set", which cut sponsor,
+// self-promotion, and interaction segments out of every download while the
+// profile screen showed nothing ticked. Cutting something the user was never
+// shown is the worst outcome available here: the removal is permanent, and
+// self-promotion covers a creator discussing their own work, which on some
+// channels is the episode. An empty list now means what it looks like.
 func (b *Builder) Args(mode domain.SponsorBlockMode, categories []domain.SponsorBlockCategory) []string {
 	flag, ok := flagForMode(mode)
-	if !ok {
+	if !ok || len(categories) == 0 {
 		return nil
 	}
 	return []string{flag, joinCategories(categories)}
@@ -61,12 +60,8 @@ func flagForMode(mode domain.SponsorBlockMode) (string, bool) {
 	}
 }
 
-// joinCategories renders categories as a comma-separated string, falling back to
-// the default set when none are provided.
+// joinCategories renders categories as the comma-separated string yt-dlp takes.
 func joinCategories(categories []domain.SponsorBlockCategory) string {
-	if len(categories) == 0 {
-		categories = defaultCategories
-	}
 	names := make([]string, len(categories))
 	for i, c := range categories {
 		names[i] = string(c)

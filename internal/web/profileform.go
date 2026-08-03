@@ -64,6 +64,10 @@ func defaultProfileFormValues() profileFormValues {
 		EmbedThumbnail:     true,
 		WriteThumbnail:     true,
 		SponsorBlockMode:   string(domain.SponsorBlockRemove),
+		// Ticked so the form shows exactly what it will do. Sponsors alone,
+		// because every other category is a judgement call the user should make
+		// deliberately rather than inherit.
+		SponsorBlockCategories: string(domain.SponsorBlockSponsor),
 	}
 }
 

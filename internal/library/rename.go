@@ -137,7 +137,7 @@ func (s *Service) backfillShowMetadata(ctx context.Context, sourceID int64) {
 		if media.Status != domain.MediaDownloaded || media.FilePath == "" {
 			continue
 		}
-		s.writeShowMetadata(ctx, source, media.FilePath, profile)
+		s.writeShowSidecars(ctx, source, media.FilePath, profile)
 		return // every item shares one channel folder; one write covers them all
 	}
 }
