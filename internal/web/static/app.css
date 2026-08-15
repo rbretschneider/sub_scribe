@@ -56,7 +56,6 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .app { display: grid; grid-template-columns: 244px 1fr; min-height: 100vh; }
 .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 14px; gap: 22px; position: sticky; top: 0; height: 100vh; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px; }
-.brand-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); flex: none; }
 .brand-name { font-family: var(--mono); font-weight: 700; font-size: 16px; letter-spacing: -0.02em; }
 .brand-name b { color: var(--accent); }
 .nav { display: flex; flex-direction: column; gap: 2px; }
