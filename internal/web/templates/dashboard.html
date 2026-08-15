@@ -84,7 +84,7 @@
       <div class="dl">
         <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
         <div>
-          <div class="dl-title">{{.Media.Metadata.Title}}</div>
+          <div class="dl-title"><a href="/library/{{.Media.ID}}">{{.Media.Metadata.Title}}</a></div>
           <div class="dl-meta">{{.SourceName}} · {{bytes .Media.FileSize}}</div>
         </div>
         <span class="status done"><span class="d"></span>Done</span>
