@@ -224,6 +224,38 @@ func TestDashboardShowsOverviewAndTokenBadge(t *testing.T) {
 	}
 }
 
+func TestDashboardRecentArchivedAreLinks(t *testing.T) {
+	lib := &fakeLibrary{overview: library.Overview{
+		SourceCount: 1,
+		Recent: []library.MediaListItem{
+			{
+				Media: domain.Media{
+					ID: 123,
+					Metadata: domain.MediaMetadata{
+						Title: "Test Video",
+					},
+				},
+				SourceName: "Test Channel",
+			},
+		},
+	}}
+	server := newTestServerFull(t, &fakeSources{}, &fakeProfiles{}, lib, filepath.Join(t.TempDir(), "c.txt"))
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `href="/library/123"`) {
+		t.Errorf("dashboard missing link to media detail; body:\n%s", body)
+	}
+	if !strings.Contains(body, `>Test Video<`) {
+		t.Errorf("dashboard missing video title; body:\n%s", body)
+	}
+}
+
 func TestSourcesPageListsSources(t *testing.T) {
 	sources := &fakeSources{sources: []domain.Source{
 		{ID: 7, Name: "Cool Channel", URL: "https://youtube.com/@cool", CollectionType: domain.CollectionChannel, Enabled: true, IndexFrequency: 6 * time.Hour},
