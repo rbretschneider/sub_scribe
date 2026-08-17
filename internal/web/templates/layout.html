@@ -6,13 +6,14 @@
   <title>{{block "title" .}}sub_scribe{{end}} · sub_scribe</title>
   <script>try{var t=localStorage.getItem("theme");if(t){document.documentElement.setAttribute("data-theme",t);}}catch(e){}</script>
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 </head>
 <body data-events-path="{{.EventsPath}}">
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-dot" aria-hidden="true"></span>
+        <svg class="brand-dot" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg"><path d="M8 5v14l11-7z" fill="#f2a63b" stroke="#d9871c" stroke-width="1"/></svg>
         <span class="brand-name">sub<b>_</b>scribe</span>
       </div>
       <nav class="nav" aria-label="Primary">
@@ -32,12 +33,7 @@
         <a class="nav-item" href="/logs"{{if eq .ActiveNav "logs"}} aria-current="page"{{end}}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 10h16M4 15h10M4 19h7"/></svg>Logs</a>
         <a class="nav-item" href="/settings/token"{{if eq .ActiveNav "token"}} aria-current="page"{{end}}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6"/></svg>Account</a>
-        <!-- In the nav list rather than the sidebar footer, which is hidden on
-             narrow screens. -->
-        <a class="nav-item nav-external" href="https://github.com/rbretschneider/sub_scribe"
-           target="_blank" rel="noopener noreferrer">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2.1c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
           GitHub
           <svg class="external-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
           <span class="visually-hidden">(opens in a new tab)</span></a>
