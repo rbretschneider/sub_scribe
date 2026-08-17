@@ -81,14 +81,14 @@
     <div class="section-head"><h2>Recently archived</h2></div>
     <div class="panel panel-scroll">
       {{range .Recent}}
-      <div class="dl">
+      <a class="dl" href="/library/{{.Media.ID}}">
         <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
         <div>
-          <div class="dl-title"><a href="/library/{{.Media.ID}}">{{.Media.Metadata.Title}}</a></div>
+          <div class="dl-title">{{.Media.Metadata.Title}}</div>
           <div class="dl-meta">{{.SourceName}} · {{bytes .Media.FileSize}}</div>
         </div>
         <span class="status done"><span class="d"></span>Done</span>
-      </div>
+      </a>
       {{else}}
       <div class="empty-line">Nothing archived yet — <a href="/sources/new">add a source</a> to begin.</div>
       {{end}}
