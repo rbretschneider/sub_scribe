@@ -147,8 +147,9 @@ a.stat:hover .stat-num { color: var(--accent); }
 .stack { display: flex; flex-direction: column; gap: 26px; }
 
 /* ---- Download / media rows ---- */
-.dl { display: grid; grid-template-columns: 80px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 13px 16px; border-bottom: 1px solid var(--border-soft); }
+.dl { display: grid; grid-template-columns: 80px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 13px 16px; border-bottom: 1px solid var(--border-soft); transition: background .15s; }
 .dl:last-child { border-bottom: none; }
+a.dl:hover { background: var(--surface-2); }
 .thumb { position: relative; width: 80px; aspect-ratio: 16/9; border-radius: 6px; overflow: hidden; flex: none; background: var(--surface-3); }
 .thumb::after { content: ""; position: absolute; inset: 0; background: var(--tp, linear-gradient(135deg, #2a3f57, #12202f)); }
 .thumb .len { position: absolute; right: 4px; bottom: 4px; z-index: 2; font-family: var(--mono); font-size: 10px; background: rgba(0,0,0,0.72); color: #fff; padding: 1px 4px; border-radius: 3px; }
