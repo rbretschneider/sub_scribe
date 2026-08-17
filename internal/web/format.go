@@ -270,3 +270,39 @@ func thumbGradient(seed string) template.CSS {
 	pair := thumbPairs[int(hasher.Sum32())%len(thumbPairs)]
 	return template.CSS(fmt.Sprintf("linear-gradient(135deg,%s,%s)", pair[0], pair[1]))
 }
+
+// retentionDelta formats a retention cutoff time as a human-readable delta
+// relative to now, e.g. "in 3 days" or "deleted 2 days ago".
+func retentionDelta(expiration time.Time) string {
+	if expiration.IsZero() {
+		return ""
+	}
+	now := time.Now()
+	until := expiration.Sub(now)
+	if until <= 0 {
+		ago := -until
+		days := int(ago.Hours()) / hoursPerDay
+		if days < 1 {
+			hours := int(ago.Hours())
+			if hours < 1 {
+				return "deleted just now"
+			}
+			return fmt.Sprintf("deleted %d hour%s ago", hours, pluralize(hours))
+		}
+		return fmt.Sprintf("deleted %d day%s ago", days, pluralize(days))
+	}
+	days := int(until.Hours()) / hoursPerDay
+	if days < 1 {
+		hours := int(until.Hours())
+		return fmt.Sprintf("in %d hour%s", hours, pluralize(hours))
+	}
+	return fmt.Sprintf("in %d day%s", days, pluralize(days))
+}
+
+// pluralize returns "s" when n != 1, empty string otherwise.
+func pluralize(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}

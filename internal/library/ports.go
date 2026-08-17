@@ -50,6 +50,9 @@ type MediaRepo interface {
 	// ListWithSource returns media joined to their source name, newest first,
 	// optionally filtered to one status (empty = all). limit <= 0 means no cap.
 	ListWithSource(ctx context.Context, status domain.MediaStatus, limit int) ([]MediaListItem, error)
+	// ListSlatedForDeletion returns media whose source has a retention policy
+	// and whose file still exists, ordered by soonest-to-expire first.
+	ListSlatedForDeletion(ctx context.Context, limit int) ([]MediaListItem, error)
 	// SameDayIndex returns the 1-based rank of an item among those sharing its
 	// upload date, so episode numbering can separate same-day uploads.
 	SameDayIndex(ctx context.Context, id int64) (int, error)

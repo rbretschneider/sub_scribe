@@ -251,6 +251,53 @@ func (r *MediaRepo) ListWithSource(ctx context.Context, status domain.MediaStatu
 	return items, rows.Err()
 }
 
+// ListSlatedForDeletion returns media whose source has retention_after > 0,
+// whose status is downloaded, and whose downloaded_at is set, ordered by
+// soonest-to-expire first. The expiration column is the retention cutoff as a
+// UNIX timestamp and is exposed on MediaListItem.Expiration so the UI can show
+// "in 3 days" / "deleted 2 days ago" deltas.
+func (r *MediaRepo) ListSlatedForDeletion(ctx context.Context, limit int) ([]library.MediaListItem, error) {
+	query := `SELECT ` + prefixedMediaColumns + `, s.name,
+		COALESCE(m.downloaded_at, m.created_at) + s.retention_after_seconds AS expiration
+		FROM media m JOIN sources s ON s.id = m.source_id
+		WHERE m.status = 'downloaded'
+		  AND m.downloaded_at IS NOT NULL
+		  AND s.retention_after_seconds > 0
+		ORDER BY expiration ASC, m.id ASC`
+	if limit > 0 {
+		query += ` LIMIT ?`
+	}
+
+	args := []any{}
+	if limit > 0 {
+		args = append(args, limit)
+	}
+
+	rows, err := r.sql.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store: list slated for deletion: %w", err)
+	}
+	defer rows.Close()
+
+	var items []library.MediaListItem
+	for rows.Next() {
+		media, sourceName, err := scanMediaWithSource(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store: scan media for deletion: %w", err)
+		}
+		var expiration int64
+		if err := rows.Scan(&expiration); err != nil {
+			return nil, fmt.Errorf("store: scan expiration: %w", err)
+		}
+		items = append(items, library.MediaListItem{
+			Media:      media,
+			SourceName: sourceName,
+			Expiration: time.Unix(expiration, 0),
+		})
+	}
+	return items, rows.Err()
+}
+
 // SameDayIndex returns the 1-based rank of a media item among the items from the
 // same source sharing its upload date, ordered by discovery.
 //

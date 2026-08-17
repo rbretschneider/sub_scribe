@@ -111,6 +111,7 @@ func templateFuncs() template.FuncMap {
 		"thumb":          thumbGradient,
 		"logTime":        logTimeFormat,
 		"lower":          strings.ToLower,
+		"retentionDelta": retentionDelta,
 	}
 }
 

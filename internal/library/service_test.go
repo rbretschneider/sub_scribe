@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -82,14 +83,17 @@ func (r *fakeSourceRepo) MarkIndexed(_ context.Context, id int64, now time.Time)
 	return nil
 }
 
-// fakeMediaRepo is an in-memory MediaRepo backed by a map.
+// fakeMediaRepo is an in-memory MediaRepo backed by a map. It holds a back-reference
+// to the fake source repo so ListSlatedForDeletion can compute expiration from
+// each media item's source RetentionAfter.
 type fakeMediaRepo struct {
-	items  map[int64]domain.Media
-	nextID int64
+	items   map[int64]domain.Media
+	nextID  int64
+	sources *fakeSourceRepo
 }
 
-func newFakeMediaRepo() *fakeMediaRepo {
-	return &fakeMediaRepo{items: map[int64]domain.Media{}}
+func newFakeMediaRepo(sources *fakeSourceRepo) *fakeMediaRepo {
+	return &fakeMediaRepo{items: map[int64]domain.Media{}, sources: sources}
 }
 
 func (r *fakeMediaRepo) Upsert(_ context.Context, media domain.Media) (int64, error) {
@@ -266,6 +270,53 @@ func (r *fakeMediaRepo) ListWithSource(_ context.Context, status domain.MediaSta
 		if limit > 0 && len(items) >= limit {
 			break
 		}
+	}
+	return items, nil
+}
+
+// ListSlatedForDeletion returns media whose source has a retention policy,
+// status is downloaded, and DownloadedAt is set, ordered by soonest-to-expire
+// first. The Expiration field is the retention cutoff.
+func (r *fakeMediaRepo) ListSlatedForDeletion(_ context.Context, limit int) ([]MediaListItem, error) {
+	type entry struct {
+		item MediaListItem
+		exp  time.Time
+	}
+	var entries []entry
+	for _, m := range r.items {
+		if m.Status != domain.MediaDownloaded {
+			continue
+		}
+		if m.DownloadedAt == nil {
+			continue
+		}
+		if r.sources == nil {
+			continue
+		}
+		src, ok := r.sources.items[m.SourceID]
+		if !ok || src.RetentionAfter <= 0 {
+			continue
+		}
+		exp := m.DownloadedAt.Add(src.RetentionAfter)
+		entries = append(entries, entry{
+			item: MediaListItem{Media: m, SourceName: src.Name},
+			exp:  exp,
+		})
+	}
+	// Sort by expiration ASC (soonest first), then by ID for stability.
+	sort.Slice(entries, func(i, j int) bool {
+		if !entries[i].exp.Equal(entries[j].exp) {
+			return entries[i].exp.Before(entries[j].exp)
+		}
+		return entries[i].item.Media.ID < entries[j].item.Media.ID
+	})
+	if limit > 0 && len(entries) > limit {
+		entries = entries[:limit]
+	}
+	items := make([]MediaListItem, 0, len(entries))
+	for _, e := range entries {
+		e.item.Expiration = e.exp
+		items = append(items, e.item)
 	}
 	return items, nil
 }
@@ -748,9 +799,10 @@ type harness struct {
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	sources := newFakeSourceRepo()
 	h := &harness{
-		sources:  newFakeSourceRepo(),
-		media:    newFakeMediaRepo(),
+		sources:  sources,
+		media:    newFakeMediaRepo(sources),
 		profiles: newFakeProfileRepo(),
 		tasks:    &fakeTaskEnqueuer{},
 		queue:    newFakeQueueMaintain(),
