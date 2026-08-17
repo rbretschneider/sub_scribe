@@ -281,13 +281,12 @@ func (r *MediaRepo) ListSlatedForDeletion(ctx context.Context, limit int) ([]lib
 
 	var items []library.MediaListItem
 	for rows.Next() {
-		media, sourceName, err := scanMediaWithSource(rows)
+		var expiration int64
+		media, sourceName, err := scanMediaWithSource(
+			extraScanner{rows: rows, extra: []any{&expiration}},
+		)
 		if err != nil {
 			return nil, fmt.Errorf("store: scan media for deletion: %w", err)
-		}
-		var expiration int64
-		if err := rows.Scan(&expiration); err != nil {
-			return nil, fmt.Errorf("store: scan expiration: %w", err)
 		}
 		items = append(items, library.MediaListItem{
 			Media:      media,
@@ -364,6 +363,19 @@ const prefixedMediaColumns = `m.id, m.source_id, m.external_id, m.title, m.descr
 	m.uploader, m.upload_date, m.duration_seconds, m.is_short, m.is_livestream,
 	m.status, m.file_path, m.file_size, m.attempts, m.last_error, m.downloaded_at,
 	m.created_at, m.updated_at`
+
+// extraScanner adapts a rowScanner so a helper that scans a fixed column set can
+// be reused for a query that selects additional trailing columns. Without this,
+// callers are tempted to call Scan twice on the same row - which database/sql
+// rejects, and which silently broke every dashboard load.
+type extraScanner struct {
+	rows  rowScanner
+	extra []any
+}
+
+func (e extraScanner) Scan(dest ...any) error {
+	return e.rows.Scan(append(dest, e.extra...)...)
+}
 
 // scanMediaWithSource scans a joined media+source row into a media value and the
 // source name. It takes a rowScanner so single-row and iterating callers share
