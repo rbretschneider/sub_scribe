@@ -99,19 +99,23 @@ type Renamer interface {
 type MediaListItem struct {
 	Media      domain.Media
 	SourceName string
+	// Expiration is the computed retention cutoff time. Only set for items
+	// returned by ListSlatedForDeletion.
+	Expiration time.Time
 }
 
 // Overview is the dashboard summary: headline counts plus the in-flight and
 // most-recently-archived items, assembled in one call so the handler makes a
 // single request.
 type Overview struct {
-	SourceCount  int
-	Counts       map[domain.MediaStatus]int
-	TotalMedia   int
-	StorageBytes int64
-	Downloading  []MediaListItem
-	Queued       []MediaListItem
-	Recent       []MediaListItem
+	SourceCount    int
+	Counts         map[domain.MediaStatus]int
+	TotalMedia     int
+	StorageBytes   int64
+	Downloading    []MediaListItem
+	Queued         []MediaListItem
+	Recent         []MediaListItem
+	RetentionQueue []MediaListItem
 }
 
 // LibraryReader serves the read-only views of the archive. The web layer depends

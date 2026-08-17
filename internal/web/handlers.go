@@ -25,6 +25,7 @@ type dashboardView struct {
 	NowDownloading []library.MediaListItem
 	UpNext         []library.MediaListItem
 	Recent         []library.MediaListItem
+	RetentionQueue []library.MediaListItem
 }
 
 // handleDashboard renders the overview: headline counts, in-flight downloads, the
@@ -46,6 +47,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		NowDownloading: overview.Downloading,
 		UpNext:         overview.Queued,
 		Recent:         overview.Recent,
+		RetentionQueue: overview.RetentionQueue,
 	}
 	s.render(w, "dashboard", http.StatusOK, view)
 }

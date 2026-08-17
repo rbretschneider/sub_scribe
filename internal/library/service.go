@@ -293,6 +293,9 @@ func (s *Service) CreateProfile(ctx context.Context, profile domain.MediaProfile
 // dashboardListLimit caps how many items each dashboard panel shows.
 const dashboardListLimit = 12
 
+// retentionQueueLimit caps how many items the retention queue panel shows.
+const retentionQueueLimit = 30
+
 // Overview assembles the dashboard summary in one call: source count, per-status
 // counts, storage used, and the in-flight, queued, and recently archived items.
 func (s *Service) Overview(ctx context.Context) (Overview, error) {
@@ -320,19 +323,24 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 	if err != nil {
 		return Overview{}, fmt.Errorf("overview recent: %w", err)
 	}
+	retentionQueue, err := s.deps.Media.ListSlatedForDeletion(ctx, retentionQueueLimit)
+	if err != nil {
+		return Overview{}, fmt.Errorf("overview retention queue: %w", err)
+	}
 
 	total := 0
 	for _, count := range counts {
 		total += count
 	}
 	return Overview{
-		SourceCount:  len(sources),
-		Counts:       counts,
-		TotalMedia:   total,
-		StorageBytes: storage,
-		Downloading:  downloading,
-		Queued:       queued,
-		Recent:       recent,
+		SourceCount:    len(sources),
+		Counts:         counts,
+		TotalMedia:     total,
+		StorageBytes:   storage,
+		Downloading:    downloading,
+		Queued:         queued,
+		Recent:         recent,
+		RetentionQueue: retentionQueue,
 	}, nil
 }
 
