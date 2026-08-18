@@ -32,11 +32,11 @@
   </a>
 </section>
 
+<div class="section-head">
+  <h2>Downloading</h2><span class="count">{{len .NowDownloading}} active</span>
+  {{if .NowDownloading}}<span class="rec"><span class="rec-dot"></span>Live</span>{{end}}
+</div>
 <div class="panel panel-scroll">
-  <div class="section-head">
-    <h2>Downloading</h2><span class="count">{{len .NowDownloading}} active</span>
-    {{if .NowDownloading}}<span class="rec"><span class="rec-dot"></span>Live</span>{{end}}
-  </div>
   {{range .NowDownloading}}
   <!-- Keyed by media id, not source id: two videos from one channel would
        otherwise share a progress bar. -->
