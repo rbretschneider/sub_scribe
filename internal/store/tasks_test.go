@@ -155,6 +155,37 @@ func TestFailMarksTaskStatusAndRecordsError(t *testing.T) {
 	}
 }
 
+func TestFailRequeuesWithBackoffWhenRetriesRemain(t *testing.T) {
+	repo := newTestDB(t).Tasks()
+	ctx := context.Background()
+
+	if _, err := repo.Enqueue(ctx, jobs.NewTask(jobs.TaskDownloadMedia, now)); err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+	claimed, err := repo.Claim(ctx, now)
+	if err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+	if err := repo.Fail(ctx, *claimed, "network blip", now); err != nil {
+		t.Fatalf("Fail() error = %v", err)
+	}
+
+	// Not runnable immediately (backoff), but runnable in the future.
+	if again, _ := repo.Claim(ctx, now); again != nil {
+		t.Error("task should not be immediately reclaimable after backoff")
+	}
+	requeued, err := repo.Claim(ctx, now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("Claim(future) error = %v", err)
+	}
+	if requeued == nil {
+		t.Fatal("expected task to be reclaimable after backoff window")
+	}
+	if requeued.Attempts != 2 {
+		t.Errorf("Attempts = %d, want 2 on second claim", requeued.Attempts)
+	}
+}
+
 func TestRetryAllFailedRequeuesFailedTasks(t *testing.T) {
 	db := newTestDB(t)
 	repo := db.Tasks()
