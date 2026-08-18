@@ -9,36 +9,37 @@ import (
 // Route patterns use Go 1.22 method+pattern routing so each verb and path maps to
 // exactly one handler with no manual method checks.
 const (
-	routeDashboard     = "GET /{$}"
-	routeLibrary       = "GET /library"
-	routeMediaDetail   = "GET /library/{id}"
-	routeMediaRetry    = "POST /library/{id}/retry"
-	routeMediaThumb    = "GET /library/{id}/thumb"
-	routeJobs          = "GET /jobs"
-	routeJobsClear     = "POST /jobs/clear"
-	routeJobDetail     = "GET /jobs/{id}"
-	routeJobRetry      = "POST /jobs/{id}/retry"
-	routeJobDelete     = "POST /jobs/{id}/delete"
-	routeSourcesList   = "GET /sources"
-	routeSourceNew     = "GET /sources/new"
-	routeSourceCreate  = "POST /sources"
-	routeSourceDetail  = "GET /sources/{id}"
-	routeSourceEdit    = "GET /sources/{id}/edit"
-	routeSourceUpdate  = "POST /sources/{id}"
-	routeSourceScan    = "POST /sources/{id}/scan"
-	routeSourceRename  = "POST /sources/{id}/rename"
-	routeSourceEnabled = "POST /sources/{id}/enabled"
-	routeSourceDelete  = "POST /sources/{id}/delete"
-	routeProfiles      = "GET /profiles"
-	routeProfileNew    = "GET /profiles/new"
-	routeProfileCreate = "POST /profiles"
-	routeProfileEdit   = "GET /profiles/{id}/edit"
-	routeProfileUpdate = "POST /profiles/{id}"
-	routeProfileDelete = "POST /profiles/{id}/delete"
-	routeLogs          = "GET /logs"
-	routeTokenPage     = "GET /settings/token"
-	routeTokenUpload   = "POST /settings/token"
-	routeStatic        = "GET /static/"
+	routeDashboard         = "GET /{$}"
+	routeLibrary           = "GET /library"
+	routeMediaDetail       = "GET /library/{id}"
+	routeMediaRetry        = "POST /library/{id}/retry"
+	routeMediaThumb        = "GET /library/{id}/thumb"
+	routeJobs              = "GET /jobs"
+	routeJobsClear         = "POST /jobs/clear"
+	routeJobDetail         = "GET /jobs/{id}"
+	routeJobRetry          = "POST /jobs/{id}/retry"
+	routeJobDelete         = "POST /jobs/{id}/delete"
+	routeSourcesList       = "GET /sources"
+	routeSourceNew         = "GET /sources/new"
+	routeSourceCreate      = "POST /sources"
+	routeSourceDetail      = "GET /sources/{id}"
+	routeSourceEdit        = "GET /sources/{id}/edit"
+	routeSourceUpdate      = "POST /sources/{id}"
+	routeSourceScan        = "POST /sources/{id}/scan"
+	routeSourceRename      = "POST /sources/{id}/rename"
+	routeSourceRetryFailed = "POST /sources/{id}/retry-failed"
+	routeSourceEnabled     = "POST /sources/{id}/enabled"
+	routeSourceDelete      = "POST /sources/{id}/delete"
+	routeProfiles          = "GET /profiles"
+	routeProfileNew        = "GET /profiles/new"
+	routeProfileCreate     = "POST /profiles"
+	routeProfileEdit       = "GET /profiles/{id}/edit"
+	routeProfileUpdate     = "POST /profiles/{id}"
+	routeProfileDelete     = "POST /profiles/{id}/delete"
+	routeLogs              = "GET /logs"
+	routeTokenPage         = "GET /settings/token"
+	routeTokenUpload       = "POST /settings/token"
+	routeStatic            = "GET /static/"
 )
 
 // staticPrefix is stripped before the embedded file server resolves an asset.
@@ -76,6 +77,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc(routeSourceUpdate, s.handleSourceUpdate)
 	s.mux.HandleFunc(routeSourceScan, s.handleSourceScan)
 	s.mux.HandleFunc(routeSourceRename, s.handleSourceRename)
+	s.mux.HandleFunc(routeSourceRetryFailed, s.handleSourceRetryFailed)
 	s.mux.HandleFunc(routeSourceEnabled, s.handleSourceEnabled)
 	s.mux.HandleFunc(routeSourceDelete, s.handleSourceDelete)
 	s.mux.HandleFunc(routeProfiles, s.handleProfiles)

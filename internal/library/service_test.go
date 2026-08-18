@@ -362,6 +362,96 @@ func mustUpsert(t *testing.T, h *harness, media domain.Media) {
 	}
 }
 
+func TestRetryAllFailedCallsQueueMaintainWithEffectiveCutoff(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	profileID := h.seedProfile(t)
+	src, err := h.svc.AddSource(ctx, validInput(profileID))
+	if err != nil {
+		t.Fatalf("AddSource: %v", err)
+	}
+
+	wantCount := 7
+	h.queue.retryAllFailedCount = wantCount
+
+	// Give the source a configured timeframe so RetryAllFailed has a cutoff to work with.
+	src.CutoffWindow = 365 * 24 * time.Hour
+	h.sources.items[src.ID] = src
+
+	n, err := h.svc.RetryAllFailed(ctx, src.ID)
+	if err != nil {
+		t.Fatalf("RetryAllFailed: %v", err)
+	}
+	if n != wantCount {
+		t.Errorf("count = %d, want %d", n, wantCount)
+	}
+	if len(h.queue.retryAllFailedCalls) != 1 {
+		t.Fatalf("queue calls = %d, want 1", len(h.queue.retryAllFailedCalls))
+	}
+	call := h.queue.retryAllFailedCalls[0]
+	if call.SourceID != src.ID {
+		t.Errorf("source = %d, want %d", call.SourceID, src.ID)
+	}
+	wantCutoff := src.EffectiveCutoff(h.now)
+	if wantCutoff == nil {
+		t.Fatal("test source has no effective cutoff")
+	}
+	if !call.Cutoff.Equal(*wantCutoff) {
+		t.Errorf("cutoff = %v, want %v", call.Cutoff, *wantCutoff)
+	}
+}
+
+func TestRetryAllFailedRefusesWhenEffectiveCutoffIsNil(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	// Build a source with no CutoffWindow and no fixed DownloadCutoff — the
+	// only way EffectiveCutoff returns nil with a seeded profile.
+	profileID := h.seedProfile(t)
+	src, err := h.svc.AddSource(ctx, validInput(profileID))
+	if err != nil {
+		t.Fatalf("AddSource: %v", err)
+	}
+	// The seeded profile gives CutoffWindow: 365d, so force the window to zero
+	// by swapping the source in the fake repo.
+	src.CutoffWindow = 0
+	src.DownloadCutoff = nil
+	h.sources.items[src.ID] = src
+
+	_, err = h.svc.RetryAllFailed(ctx, src.ID)
+	if err == nil {
+		t.Fatal("expected error when EffectiveCutoff is nil")
+	}
+	if len(h.queue.retryAllFailedCalls) != 0 {
+		t.Errorf("queue should not be called, got %d", len(h.queue.retryAllFailedCalls))
+	}
+}
+
+func TestRetryAllFailedPropagatesQueueError(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	profileID := h.seedProfile(t)
+	src, err := h.svc.AddSource(ctx, validInput(profileID))
+	if err != nil {
+		t.Fatalf("AddSource: %v", err)
+	}
+	h.queue.retryAllFailedErr = errors.New("boom")
+
+	_, err = h.svc.RetryAllFailed(ctx, src.ID)
+	if err == nil {
+		t.Fatal("expected error from queue")
+	}
+}
+
+func TestRetryAllFailedReturnsSourceNotFound(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	_, err := h.svc.RetryAllFailed(ctx, 99999)
+	if err == nil {
+		t.Fatal("expected error for missing source")
+	}
+}
+
 func TestEnforceRedownloadRequeuesOnlyStaleMedia(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
@@ -553,9 +643,18 @@ type fakeQueueMaintain struct {
 	retried         []int64
 	retryErr        error
 
+	retryAllFailedCalls []retryAllFailedCall
+	retryAllFailedErr   error
+	retryAllFailedCount int
+
 	deleted        []int64
 	finishedPruned int
 	pruneCutoff    time.Time
+}
+
+type retryAllFailedCall struct {
+	SourceID int64
+	Cutoff   time.Time
 }
 
 func newFakeQueueMaintain() *fakeQueueMaintain {
@@ -568,6 +667,17 @@ func (q *fakeQueueMaintain) Retry(_ context.Context, id int64, _ time.Time) erro
 	}
 	q.retried = append(q.retried, id)
 	return nil
+}
+
+func (q *fakeQueueMaintain) RetryAllFailed(_ context.Context, sourceID int64, cutoff, _ time.Time) (int, error) {
+	if q.retryAllFailedErr != nil {
+		return 0, q.retryAllFailedErr
+	}
+	q.retryAllFailedCalls = append(q.retryAllFailedCalls, retryAllFailedCall{
+		SourceID: sourceID,
+		Cutoff:   cutoff,
+	})
+	return q.retryAllFailedCount, nil
 }
 
 func (q *fakeQueueMaintain) Delete(_ context.Context, id int64) error {
