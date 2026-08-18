@@ -138,7 +138,7 @@ a.stat:hover .stat-num { color: var(--accent); }
    screen tall and scrollable in place, instead of one panel running metres long
    while the column beside it sits empty. The cap is also bounded by viewport
    height so a short window still shows every panel. */
-.panel-scroll { max-height: min(440px, 58vh); overflow-y: auto; overscroll-behavior: contain; }
+.panel.panel-scroll { max-height: min(440px, 58vh); overflow-y: auto; overscroll-behavior: contain; }
 /* Grid and flex children default to min-width:auto, so one long, unbreakable
    video title stretches its track and pushes the next column off screen. Every
    nested track that holds a title needs an explicit zero minimum. */
