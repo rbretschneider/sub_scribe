@@ -146,6 +146,23 @@ func (r *TaskRepo) Retry(ctx context.Context, id int64, now time.Time) error {
 	return nil
 }
 
+// RetryAllFailed requeues every failed task for a source whose updated_at falls
+// within the given cutoff. Returns the number of rows updated.
+func (r *TaskRepo) RetryAllFailed(ctx context.Context, sourceID int64, cutoff, now time.Time) (int, error) {
+	res, err := r.sql.ExecContext(ctx,
+		`UPDATE tasks SET status = ?, attempts = 0, last_error = '', run_after = ?, updated_at = ?
+		 WHERE source_id = ? AND status = ? AND updated_at >= ?`,
+		jobs.StatusPending, now.Unix(), now.Unix(), sourceID, jobs.StatusFailed, cutoff.Unix())
+	if err != nil {
+		return 0, fmt.Errorf("store: retry all failed for source %d: %w", sourceID, err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("store: retry all failed for source %d: %w", sourceID, err)
+	}
+	return int(affected), nil
+}
+
 // Delete removes a single queue entry. A running task is refused: its worker is
 // still going to report an outcome, and deleting the row out from under it would
 // turn a completed download into a confusing "recording task success failed"

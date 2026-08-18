@@ -131,6 +131,9 @@ type LibraryReader interface {
 	// SourceStats returns what each source has downloaded, keyed by source id, so
 	// a delete confirmation can name what is at stake.
 	SourceStats(ctx context.Context) (map[int64]SourceStats, error)
+	// RetryAllFailed requeues every failed task for a source within its
+	// configured timeframe, returning how many were requeued.
+	RetryAllFailed(ctx context.Context, sourceID int64) (int, error)
 }
 
 // DownloadPacer decides whether a download may start now.

@@ -65,6 +65,9 @@ type JobReader interface {
 type QueueMaintain interface {
 	// Retry requeues a finished job for a fresh attempt.
 	Retry(ctx context.Context, id int64, now time.Time) error
+	// RetryAllFailed requeues every failed task for a source whose updated_at
+	// falls within cutoff. Returns the number of rows updated.
+	RetryAllFailed(ctx context.Context, sourceID int64, cutoff, now time.Time) (int, error)
 	// Delete removes one queue entry, refusing to remove a running one.
 	Delete(ctx context.Context, id int64) error
 	// DeleteFinished removes every settled entry, returning how many were removed.

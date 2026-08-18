@@ -382,6 +382,28 @@ func (s *Service) RetryMedia(ctx context.Context, id int64) error {
 	return nil
 }
 
+// RetryAllFailed requeues every failed task for a source within its configured
+// timeframe. It looks up the source, computes its effective cutoff, and delegates
+// to the queue maintain layer. A nil cutoff (no window and no fixed date) refuses
+// the action so the user cannot accidentally requeue an unbounded set.
+func (s *Service) RetryAllFailed(ctx context.Context, sourceID int64) (int, error) {
+	source, err := s.deps.Sources.Get(ctx, sourceID)
+	if err != nil {
+		return 0, fmt.Errorf("get source: %w", err)
+	}
+
+	cutoff := source.EffectiveCutoff(s.deps.Clock.Now())
+	if cutoff == nil {
+		return 0, fmt.Errorf("source %d has no configured timeframe — set CutoffWindow or DownloadCutoff", sourceID)
+	}
+
+	n, err := s.deps.Queue.RetryAllFailed(ctx, sourceID, *cutoff, s.deps.Clock.Now())
+	if err != nil {
+		return 0, fmt.Errorf("retry all failed: %w", err)
+	}
+	return n, nil
+}
+
 // GetProfile returns a single profile by id.
 func (s *Service) GetProfile(ctx context.Context, id int64) (domain.MediaProfile, error) {
 	return s.deps.Profiles.Get(ctx, id)

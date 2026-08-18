@@ -365,6 +365,23 @@ func (s *Server) handleSourceRename(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, fmt.Sprintf("/sources/%d", id))
 }
 
+// handleSourceRetryFailed requeues every failed task for a source within its
+// configured timeframe. The user clicks this after fixing whatever caused the
+// failures and wants all of them retried in one go.
+func (s *Server) handleSourceRetryFailed(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	n, err := s.deps.Library.RetryAllFailed(r.Context(), id)
+	if err != nil {
+		http.Error(w, "could not retry failed jobs", http.StatusInternalServerError)
+		return
+	}
+	_ = n
+	redirect(w, r, fmt.Sprintf("/sources/%d", id))
+}
+
 // enabledFormField carries the desired state for the pause/resume control.
 const enabledFormField = "enabled"
 

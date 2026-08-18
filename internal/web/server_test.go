@@ -178,6 +178,10 @@ func (f *fakeLibrary) GetMedia(context.Context, int64) (library.MediaListItem, e
 	return f.item, nil
 }
 
+func (f *fakeLibrary) RetryAllFailed(ctx context.Context, sourceID int64) (int, error) {
+	return 0, nil
+}
+
 // newTestServer builds a Server with the given fakes, a default empty library,
 // and a temp cookies path.
 func newTestServer(t *testing.T, sources *fakeSources, profiles *fakeProfiles, cookiesPath string) *Server {
