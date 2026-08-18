@@ -133,6 +133,8 @@ func TestBuildDownloadArgs(t *testing.T) {
 		"--progress",
 		"--progress-template", progressTemplateValue,
 		"--print", "after_move:" + afterMovePrintPrefix + "%(filepath)s",
+		// player client is pinned for every download, appended last before the url.
+		"--extractor-args", playerClientArgPrefix + defaultPlayerClient,
 	}
 
 	tests := []struct {
@@ -310,6 +312,15 @@ func TestScanDownloadOutputOnRealYtDlpOutput(t *testing.T) {
 	}
 	if len(percents) != 3 {
 		t.Errorf("progress callbacks = %d, want 3", len(percents))
+	}
+}
+
+func TestDownloadArgsPinsPlayerClient(t *testing.T) {
+	// yt-dlp's default client selection 403s on the data fetch for some
+	// videos; downloads must pin a working player client.
+	args := buildDownloadArgs("https://example.com/v", DownloadOptions{OutputPath: "/media/out"}, "", Throttle{})
+	if !containsPair(args, flagExtractorArgs, playerClientArgPrefix+defaultPlayerClient) {
+		t.Fatalf("download args do not pin the player client: %v", args)
 	}
 }
 
