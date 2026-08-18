@@ -15,6 +15,10 @@
       <input type="hidden" name="enabled" value="{{if .Source.Enabled}}false{{else}}true{{end}}">
       <button class="btn btn-ghost" type="submit">{{if .Source.Enabled}}Pause scanning{{else}}Resume scanning{{end}}</button>
     </form>
+    <form method="post" action="/sources/{{.Source.ID}}/retry-failed"
+          title="Requeue every failed download for this source within its configured timeframe.">
+      <button class="btn btn-ghost" type="submit">Retry all failed</button>
+    </form>
     <form method="post" action="/sources/{{.Source.ID}}/rename"
           title="Move files already downloaded into the layout this source's naming template describes.">
       <button class="btn btn-ghost" type="submit">Fix file names</button>

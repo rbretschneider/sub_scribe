@@ -87,6 +87,7 @@ func (f *fakeJobs) DeleteFinishedBefore(context.Context, time.Time) (int, error)
 func (f *fakeJobs) DeleteOrphans(context.Context) (int, error)                   { return 0, nil }
 func (f *fakeJobs) RequeueRunning(context.Context, time.Time) (int, error)       { return 0, nil }
 func (f *fakeJobs) ActiveMediaIDs(context.Context) (map[int64]bool, error)       { return nil, nil }
+func (f *fakeJobs) RetryAllFailed(_ context.Context, _ int64, _ time.Time, _ time.Time) (int, error) { return 0, nil }
 
 // fakeMediaService records retry requests from the media detail screen.
 type fakeMediaService struct {

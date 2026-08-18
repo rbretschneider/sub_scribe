@@ -19,16 +19,17 @@ const (
 	routeJobDetail     = "GET /jobs/{id}"
 	routeJobRetry      = "POST /jobs/{id}/retry"
 	routeJobDelete     = "POST /jobs/{id}/delete"
-	routeSourcesList   = "GET /sources"
-	routeSourceNew     = "GET /sources/new"
-	routeSourceCreate  = "POST /sources"
-	routeSourceDetail  = "GET /sources/{id}"
-	routeSourceEdit    = "GET /sources/{id}/edit"
-	routeSourceUpdate  = "POST /sources/{id}"
-	routeSourceScan    = "POST /sources/{id}/scan"
-	routeSourceRename  = "POST /sources/{id}/rename"
-	routeSourceEnabled = "POST /sources/{id}/enabled"
-	routeSourceDelete  = "POST /sources/{id}/delete"
+	routeSourcesList       = "GET /sources"
+	routeSourceNew         = "GET /sources/new"
+	routeSourceCreate      = "POST /sources"
+	routeSourceDetail      = "GET /sources/{id}"
+	routeSourceEdit        = "GET /sources/{id}/edit"
+	routeSourceUpdate      = "POST /sources/{id}"
+	routeSourceScan        = "POST /sources/{id}/scan"
+	routeSourceRename      = "POST /sources/{id}/rename"
+	routeSourceRetryFailed = "POST /sources/{id}/retry-failed"
+	routeSourceEnabled     = "POST /sources/{id}/enabled"
+	routeSourceDelete      = "POST /sources/{id}/delete"
 	routeProfiles      = "GET /profiles"
 	routeProfileNew    = "GET /profiles/new"
 	routeProfileCreate = "POST /profiles"
@@ -76,6 +77,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc(routeSourceUpdate, s.handleSourceUpdate)
 	s.mux.HandleFunc(routeSourceScan, s.handleSourceScan)
 	s.mux.HandleFunc(routeSourceRename, s.handleSourceRename)
+	s.mux.HandleFunc(routeSourceRetryFailed, s.handleSourceRetryFailed)
 	s.mux.HandleFunc(routeSourceEnabled, s.handleSourceEnabled)
 	s.mux.HandleFunc(routeSourceDelete, s.handleSourceDelete)
 	s.mux.HandleFunc(routeProfiles, s.handleProfiles)

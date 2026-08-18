@@ -553,9 +553,18 @@ type fakeQueueMaintain struct {
 	retried         []int64
 	retryErr        error
 
+	retryAllFailedCalls []retryAllFailedCall
+	retryAllFailedErr   error
+	retryAllFailedCount int
+
 	deleted        []int64
 	finishedPruned int
 	pruneCutoff    time.Time
+}
+
+type retryAllFailedCall struct {
+	SourceID int64
+	Cutoff   time.Time
 }
 
 func newFakeQueueMaintain() *fakeQueueMaintain {
@@ -568,6 +577,17 @@ func (q *fakeQueueMaintain) Retry(_ context.Context, id int64, _ time.Time) erro
 	}
 	q.retried = append(q.retried, id)
 	return nil
+}
+
+func (q *fakeQueueMaintain) RetryAllFailed(_ context.Context, sourceID int64, cutoff, _ time.Time) (int, error) {
+	if q.retryAllFailedErr != nil {
+		return 0, q.retryAllFailedErr
+	}
+	q.retryAllFailedCalls = append(q.retryAllFailedCalls, retryAllFailedCall{
+		SourceID: sourceID,
+		Cutoff:   cutoff,
+	})
+	return q.retryAllFailedCount, nil
 }
 
 func (q *fakeQueueMaintain) Delete(_ context.Context, id int64) error {
