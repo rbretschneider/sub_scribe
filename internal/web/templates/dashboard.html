@@ -32,31 +32,29 @@
   </a>
 </section>
 
-<div class="grid-2">
-  <div>
-    <div class="section-head">
-      <h2>Downloading</h2><span class="count">{{len .NowDownloading}} active</span>
-      {{if .NowDownloading}}<span class="rec"><span class="rec-dot"></span>Live</span>{{end}}
-    </div>
-    <div class="panel panel-scroll">
-      {{range .NowDownloading}}
-      <!-- Keyed by media id, not source id: two videos from one channel would
-           otherwise share a progress bar. -->
-      <div class="dl" data-media="{{.Media.ID}}">
-        <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
-        <div>
-          <div class="dl-title"><a href="/library/{{.Media.ID}}">{{.Media.Metadata.Title}}</a></div>
-          <div class="dl-meta">{{.SourceName}}</div>
-          <div class="dl-prog indet"><i data-progress="{{.Media.ID}}"></i></div>
-        </div>
-        <span class="status downloading"><span class="d"></span>Downloading</span>
-      </div>
-      {{else}}
-      <div class="empty-line">Nothing downloading right now.</div>
-      {{end}}
-    </div>
+<div class="panel panel-scroll">
+  <div class="section-head">
+    <h2>Downloading</h2><span class="count">{{len .NowDownloading}} active</span>
+    {{if .NowDownloading}}<span class="rec"><span class="rec-dot"></span>Live</span>{{end}}
   </div>
+  {{range .NowDownloading}}
+  <!-- Keyed by media id, not source id: two videos from one channel would
+       otherwise share a progress bar. -->
+  <div class="dl" data-media="{{.Media.ID}}">
+    <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
+    <div>
+      <div class="dl-title"><a href="/library/{{.Media.ID}}">{{.Media.Metadata.Title}}</a></div>
+      <div class="dl-meta">{{.SourceName}}</div>
+      <div class="dl-prog indet"><i data-progress="{{.Media.ID}}"></i></div>
+    </div>
+    <span class="status downloading"><span class="d"></span>Downloading</span>
+  </div>
+  {{else}}
+  <div class="empty-line">Nothing downloading right now.</div>
+  {{end}}
+</div>
 
+<div class="grid-2">
   <div>
     <div class="section-head"><h2>Recently archived</h2></div>
     <div class="panel panel-scroll">
@@ -74,24 +72,6 @@
       {{end}}
     </div>
   </div>
-
-  {{if .UpNext}}
-  <div>
-    <div class="section-head"><h2>Up next</h2><span class="count">{{.Queued}} queued</span></div>
-    <div class="panel panel-scroll">
-      {{range .UpNext}}
-      <div class="dl">
-        <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
-        <div>
-          <div class="dl-title">{{.Media.Metadata.Title}}</div>
-          <div class="dl-meta">{{.SourceName}}</div>
-        </div>
-        <span class="status queued"><span class="d"></span>Queued</span>
-      </div>
-      {{end}}
-    </div>
-  </div>
-  {{end}}
 
   <div>
     <div class="section-head">
