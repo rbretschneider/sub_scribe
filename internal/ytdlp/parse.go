@@ -94,6 +94,12 @@ const (
 	// potProviderArgPrefix is the yt-dlp extractor-args key for the bgutil HTTP
 	// PO-token provider; the provider's base URL is appended to it.
 	potProviderArgPrefix = "youtubepot-bgutilhttp:base_url="
+	// playerClientArgPrefix pins the YouTube player client. yt-dlp's default
+	// client selection returns stream URLs that 403 on the data fetch for some
+	// videos (first seen across Red Bull Motorsports uploads); tv_simply's URLs
+	// download reliably. Update defaultPlayerClient if YouTube deprecates it.
+	playerClientArgPrefix = "youtube:player_client="
+	defaultPlayerClient   = "tv_simply"
 )
 
 // indexLine is the subset of yt-dlp --dump-json fields this package consumes.
@@ -215,6 +221,7 @@ func buildDownloadArgs(url string, opts DownloadOptions, potProviderURL string, 
 	args = throttle.appendDownloadFlags(args)
 	args = append(args, opts.ExtraArgs...)
 	args = appendProgressFlags(args)
+	args = appendPlayerClient(args)
 	return append(args, url)
 }
 
@@ -226,6 +233,12 @@ func appendPOTProvider(args []string, potProviderURL string) []string {
 		return args
 	}
 	return append(args, flagExtractorArgs, potProviderArgPrefix+potProviderURL)
+}
+
+// appendPlayerClient pins the YouTube player client for downloads. See
+// defaultPlayerClient for why this is required.
+func appendPlayerClient(args []string) []string {
+	return append(args, flagExtractorArgs, playerClientArgPrefix+defaultPlayerClient)
 }
 
 // appendPaths splits the destination from the scratch space: the finished file
