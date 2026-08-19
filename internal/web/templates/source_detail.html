@@ -32,6 +32,11 @@
     already downloaded is untouched, and queued downloads still run.</p>
 </div>
 {{end}}
+{{if gt .Retried 0}}
+<div class="alert alert-info">
+  <p>{{.Retried}} failed download{{if ne .Retried 1}}s{{end}} have been requeued.</p>
+</div>
+{{end}}
 
 <dl class="detail-grid">
   <dt>On disk</dt>

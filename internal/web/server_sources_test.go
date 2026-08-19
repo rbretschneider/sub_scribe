@@ -211,3 +211,65 @@ func TestSourceRenameEnqueuesAndRedirects(t *testing.T) {
 		t.Errorf("renamed = %v, want [7]", sources.renamed)
 	}
 }
+
+func TestSourceRetryFailedRedirectsWithCount(t *testing.T) {
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Chan", URL: "https://example.com/@chan"}}
+	lib := &fakeLibrary{retryCount: 3}
+	server := newTestServerFull(t, sources, &fakeProfiles{}, lib, "")
+
+	req := httptest.NewRequest(http.MethodPost, "/sources/7/retry-failed", nil)
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got := rec.Header().Get("Location"); got != "/sources/7?retried=3" {
+		t.Errorf("Location = %q, want /sources/7?retried=3", got)
+	}
+	if lib.retryCount != 3 {
+		t.Errorf("RetryAllFailed returned %d, want 3", lib.retryCount)
+	}
+}
+
+func TestSourceRetryFailedAlertShownWhenNonZero(t *testing.T) {
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Chan", URL: "https://example.com/@chan"}}
+	server := newTestServer(t, sources, &fakeProfiles{}, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sources/7?retried=3", nil))
+	body := rec.Body.String()
+
+	if !strings.Contains(body, "3 failed downloads have been requeued.") {
+		t.Errorf("expected retry notice in body:\n%s", body)
+	}
+	if !strings.Contains(body, `class="alert alert-info"`) {
+		t.Error("expected the alert-info class on the retry notice")
+	}
+}
+
+func TestSourceRetryFailedAlertHiddenWhenAbsent(t *testing.T) {
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Chan", URL: "https://example.com/@chan"}}
+	server := newTestServer(t, sources, &fakeProfiles{}, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sources/7", nil))
+	body := rec.Body.String()
+
+	if strings.Contains(body, "have been requeued") {
+		t.Errorf("alert should not appear without ?retried, got:\n%s", body)
+	}
+}
+
+func TestSourceRetryFailedAlertHiddenWhenZero(t *testing.T) {
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Chan", URL: "https://example.com/@chan"}}
+	server := newTestServer(t, sources, &fakeProfiles{}, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sources/7?retried=0", nil))
+	body := rec.Body.String()
+
+	if strings.Contains(body, "have been requeued") {
+		t.Errorf("alert should not appear when ?retried=0, got:\n%s", body)
+	}
+}

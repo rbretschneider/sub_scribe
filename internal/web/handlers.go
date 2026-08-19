@@ -310,6 +310,9 @@ type sourceDetailView struct {
 	baseView
 	Source domain.Source
 	Stats  library.SourceStats
+	// Retried is set from the ?retried= query parameter so the page can show
+	// a one-time notice after a "Retry all failed" submission.
+	Retried int
 }
 
 // handleSourceDetail shows one source, or 404 if it does not exist.
@@ -332,6 +335,7 @@ func (s *Server) handleSourceDetail(w http.ResponseWriter, r *http.Request) {
 		baseView: s.newBaseView(source.Name, navSources),
 		Source:   source,
 		Stats:    stats[id],
+		Retried:  queryInt(r, "retried"),
 	}
 	s.render(w, "source_detail", http.StatusOK, view)
 }
@@ -378,8 +382,7 @@ func (s *Server) handleSourceRetryFailed(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "could not retry failed jobs", http.StatusInternalServerError)
 		return
 	}
-	_ = n
-	redirect(w, r, fmt.Sprintf("/sources/%d", id))
+	redirect(w, r, fmt.Sprintf("/sources/%d?retried=%d", id, n))
 }
 
 // enabledFormField carries the desired state for the pause/resume control.
@@ -448,4 +451,19 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+// queryInt reads a single integer from the request query string, returning 0
+// when the key is absent or non-numeric. The source detail page uses it to
+// pick up the ?retried=N count after a "Retry all failed" submission.
+func queryInt(r *http.Request, key string) int {
+	v := r.URL.Query().Get(key)
+	if v == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0
+	}
+	return n
 }

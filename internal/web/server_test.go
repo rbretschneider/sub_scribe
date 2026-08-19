@@ -160,6 +160,8 @@ type fakeLibrary struct {
 	item   library.MediaListItem
 	getErr error
 	stats  map[int64]library.SourceStats
+	// retryCount is returned by RetryAllFailed; tests set it per case.
+	retryCount int
 }
 
 func (f *fakeLibrary) Overview(context.Context) (library.Overview, error) {
@@ -179,7 +181,7 @@ func (f *fakeLibrary) GetMedia(context.Context, int64) (library.MediaListItem, e
 }
 
 func (f *fakeLibrary) RetryAllFailed(ctx context.Context, sourceID int64) (int, error) {
-	return 0, nil
+	return f.retryCount, nil
 }
 
 // newTestServer builds a Server with the given fakes, a default empty library,
