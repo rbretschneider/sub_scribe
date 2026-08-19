@@ -30,6 +30,10 @@ type fakeJobs struct {
 	deleted         []int64
 	deleteErr       error
 	clearedFinished bool
+
+	// unfinished is what UnfinishedTypesForSource reports for every source, for
+	// tests of the "already scanning" states.
+	unfinished map[jobs.TaskType]bool
 }
 
 func (f *fakeJobs) ListJobs(_ context.Context, filter library.JobFilter) ([]library.JobListItem, error) {
@@ -60,6 +64,10 @@ func (f *fakeJobs) GetJob(_ context.Context, id int64) (library.JobListItem, err
 
 func (f *fakeJobs) CountsByStatus(context.Context) (map[jobs.TaskStatus]int, error) {
 	return f.counts, nil
+}
+
+func (f *fakeJobs) UnfinishedTypesForSource(context.Context, int64) (map[jobs.TaskType]bool, error) {
+	return f.unfinished, nil
 }
 
 func (f *fakeJobs) Retry(_ context.Context, id int64, _ time.Time) error {
@@ -284,15 +292,23 @@ func TestJobRetryRequeuesAndReturnsToTheJob(t *testing.T) {
 	}
 }
 
-func TestJobRetryReportsAConflictWhenTheJobIsStillQueued(t *testing.T) {
+func TestJobRetryOnAnAlreadyQueuedJobReturnsToTheJob(t *testing.T) {
+	// The job being queued or running is the state a retry asks for, so the
+	// request lands back on the job's page rather than a dead-end error.
 	fake := &fakeJobs{counts: map[jobs.TaskStatus]int{}, retryErr: library.ErrJobNotRetryable}
 	server := queueServer(t, fake, &fakeLibrary{}, &fakeMediaService{}, nil)
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/jobs/12/retry", nil))
 
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409", rec.Code)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if got := rec.Header().Get("Location"); got != "/jobs/12" {
+		t.Errorf("Location = %q, want /jobs/12", got)
+	}
+	if len(fake.retried) != 0 {
+		t.Errorf("retried = %v, want none", fake.retried)
 	}
 }
 
@@ -371,15 +387,20 @@ func TestJobDeleteRemovesTheEntryAndReturnsToTheList(t *testing.T) {
 	}
 }
 
-func TestJobDeleteRefusesARunningJob(t *testing.T) {
+func TestJobDeleteRefusesARunningJobAndReturnsToIt(t *testing.T) {
 	fake := &fakeJobs{counts: map[jobs.TaskStatus]int{}, deleteErr: library.ErrJobNotDeletable}
 	server := queueServer(t, fake, &fakeLibrary{}, &fakeMediaService{}, nil)
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/jobs/12/delete", nil))
 
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409", rec.Code)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	// Back to the job's own page, which shows it running with no delete button —
+	// the explanation a bare conflict page could not give.
+	if got := rec.Header().Get("Location"); got != "/jobs/12" {
+		t.Errorf("Location = %q, want /jobs/12", got)
 	}
 }
 

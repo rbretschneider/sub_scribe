@@ -126,7 +126,9 @@ func (s *Server) handleJobRetry(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.deps.Queue.Retry(r.Context(), id, s.deps.Clock.Now()); err != nil {
 		if errors.Is(err, library.ErrJobNotRetryable) {
-			http.Error(w, "this job is already queued or running", http.StatusConflict)
+			// Already queued or running — the state the user asked for. Its page
+			// shows that; a bare conflict error would be a dead end.
+			redirect(w, r, "/jobs/"+strconv.FormatInt(id, 10))
 			return
 		}
 		s.renderJobLookupError(w, err)
@@ -145,7 +147,9 @@ func (s *Server) handleJobDelete(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.deps.Queue.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, library.ErrJobNotDeletable) {
-			http.Error(w, "a running job cannot be deleted; wait for it to finish", http.StatusConflict)
+			// Back to the job, whose page shows it is running and withholds the
+			// delete button — clearer than a bare conflict error page.
+			redirect(w, r, "/jobs/"+strconv.FormatInt(id, 10))
 			return
 		}
 		http.Error(w, "could not delete that job", http.StatusInternalServerError)

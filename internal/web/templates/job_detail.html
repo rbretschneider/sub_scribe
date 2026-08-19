@@ -17,14 +17,14 @@
   <div class="head-actions">
     {{if .CanRetry}}
     <form method="post" action="/jobs/{{.Job.Task.ID}}/retry">
-      <button class="btn btn-primary" type="submit">Run again</button>
+      <button class="btn btn-primary" type="submit" data-busy="Queuing…">Run again</button>
     </form>
     {{end}}
     {{if .WatchURL}}<a class="btn btn-secondary" href="{{.WatchURL}}" rel="noopener noreferrer" target="_blank">Open on YouTube</a>{{end}}
     {{if .CanDelete}}
     <form method="post" action="/jobs/{{.Job.Task.ID}}/delete"
           onsubmit="return confirm('Delete this job from the queue history?');">
-      <button class="btn btn-danger" type="submit">Delete</button>
+      <button class="btn btn-danger" type="submit" data-busy="Deleting…">Delete</button>
     </form>
     {{end}}
   </div>

@@ -72,6 +72,52 @@ func newQueueFixture(t *testing.T) queueFixture {
 	}
 }
 
+func TestUnfinishedTypesForSourceReportsOnlyThatSourcesLiveWork(t *testing.T) {
+	f := newQueueFixture(t)
+	ctx := context.Background()
+
+	// A pending scan and a running scan both count as unfinished; a finished
+	// rename does not.
+	if _, err := f.tasks.Enqueue(ctx, jobs.NewTask(jobs.TaskIndexSource, now).ForSource(f.sourceID)); err != nil {
+		t.Fatalf("Enqueue index: %v", err)
+	}
+	renameID, err := f.tasks.Enqueue(ctx, jobs.NewTask(jobs.TaskRenameFiles, now).ForSource(f.sourceID))
+	if err != nil {
+		t.Fatalf("Enqueue rename: %v", err)
+	}
+	if err := f.tasks.Complete(ctx, renameID, now); err != nil {
+		t.Fatalf("Complete rename: %v", err)
+	}
+
+	// Another source's queued scan must not leak into this source's answer.
+	existing, err := f.db.Sources().Get(ctx, f.sourceID)
+	if err != nil {
+		t.Fatalf("get fixture source: %v", err)
+	}
+	otherID, err := f.db.Sources().Create(ctx, domain.Source{
+		Name: "Other", URL: "https://youtube.com/@other",
+		CollectionType: domain.CollectionChannel, MediaProfileID: existing.MediaProfileID,
+		Enabled: true, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("create other source: %v", err)
+	}
+	if _, err := f.tasks.Enqueue(ctx, jobs.NewTask(jobs.TaskIndexSource, now).ForSource(otherID)); err != nil {
+		t.Fatalf("Enqueue other index: %v", err)
+	}
+
+	types, err := f.tasks.UnfinishedTypesForSource(ctx, f.sourceID)
+	if err != nil {
+		t.Fatalf("UnfinishedTypesForSource: %v", err)
+	}
+	if !types[jobs.TaskIndexSource] {
+		t.Error("pending scan not reported as unfinished")
+	}
+	if types[jobs.TaskRenameFiles] {
+		t.Error("completed rename reported as unfinished")
+	}
+}
+
 func TestListJobsResolvesTheChannelThroughTheMediaItem(t *testing.T) {
 	f := newQueueFixture(t)
 	ctx := context.Background()

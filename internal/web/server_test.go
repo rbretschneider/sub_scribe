@@ -192,11 +192,19 @@ func newTestServer(t *testing.T, sources *fakeSources, profiles *fakeProfiles, c
 
 // newTestServerFull builds a Server, letting a test supply a specific library.
 func newTestServerFull(t *testing.T, sources *fakeSources, profiles *fakeProfiles, lib library.LibraryReader, cookiesPath string) *Server {
+	return newTestServerWithJobs(t, sources, profiles, lib, &fakeJobs{}, cookiesPath)
+}
+
+// newTestServerWithJobs additionally puts the queue reader under the test's
+// control, for screens whose rendering depends on what is queued or running.
+func newTestServerWithJobs(t *testing.T, sources *fakeSources, profiles *fakeProfiles, lib library.LibraryReader, jobsFake *fakeJobs, cookiesPath string) *Server {
 	t.Helper()
 	server, err := NewServer(ServerDeps{
 		Sources:     sources,
 		Profiles:    profiles,
 		Library:     lib,
+		Jobs:        jobsFake,
+		Queue:       jobsFake,
 		Logs:        applog.NewBuffer(0),
 		CookiesPath: cookiesPath,
 		Clock:       fixedClock{now: testNow},

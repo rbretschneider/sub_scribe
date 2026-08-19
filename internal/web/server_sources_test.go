@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"sub_scribe/internal/domain"
+	"sub_scribe/internal/jobs"
 )
 
 // submitForm posts form values to path and returns the recorded response.
@@ -190,6 +191,99 @@ func TestSourceDetailExplainsAPausedSource(t *testing.T) {
 	}
 	if !strings.Contains(body, "will not be scanned") {
 		t.Error("a paused source should say what being paused means")
+	}
+}
+
+// scanBusyServer builds a server whose queue already holds unfinished work of
+// the given task types for every source.
+func scanBusyServer(t *testing.T, sources *fakeSources, unfinished map[jobs.TaskType]bool) *Server {
+	t.Helper()
+	jobsFake := &fakeJobs{unfinished: unfinished}
+	return newTestServerWithJobs(t, sources, &fakeProfiles{}, &fakeLibrary{}, jobsFake, "")
+}
+
+func TestSourceDetailDisablesScanWhileAScanIsInFlight(t *testing.T) {
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Chan", Enabled: true}}
+	server := scanBusyServer(t, sources, map[jobs.TaskType]bool{jobs.TaskIndexSource: true})
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sources/7", nil))
+	body := rec.Body.String()
+
+	if !strings.Contains(body, "Scanning…") {
+		t.Error("an in-flight scan should render as Scanning…")
+	}
+	if strings.Contains(body, ">Scan now<") {
+		t.Error("Scan now still offered while a scan is in flight")
+	}
+	if !strings.Contains(body, "Fix file names") {
+		t.Error("renaming should stay available while only a scan is in flight")
+	}
+}
+
+func TestSourceDetailDisablesRenameWhileARenameIsInFlight(t *testing.T) {
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Chan", Enabled: true}}
+	server := scanBusyServer(t, sources, map[jobs.TaskType]bool{jobs.TaskRenameFiles: true})
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sources/7", nil))
+	body := rec.Body.String()
+
+	if !strings.Contains(body, "Renaming files…") {
+		t.Error("an in-flight rename should render as Renaming files…")
+	}
+	if strings.Contains(body, ">Fix file names<") {
+		t.Error("Fix file names still offered while a rename is in flight")
+	}
+}
+
+func TestScanNowEnqueuesWhenIdleAndRedirects(t *testing.T) {
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Chan"}}
+	server := newTestServer(t, sources, &fakeProfiles{}, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/sources/7/scan", nil))
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if got := rec.Header().Get("Location"); got != "/sources/7" {
+		t.Errorf("Location = %q, want /sources/7", got)
+	}
+	if len(sources.scanned) != 1 || sources.scanned[0] != 7 {
+		t.Errorf("scanned = %v, want [7]", sources.scanned)
+	}
+}
+
+func TestScanNowSkipsWhenAScanIsAlreadyInFlight(t *testing.T) {
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Chan"}}
+	server := scanBusyServer(t, sources, map[jobs.TaskType]bool{jobs.TaskIndexSource: true})
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/sources/7/scan", nil))
+
+	// Still a success — the scan the user wanted is happening — but no duplicate
+	// is stacked behind it.
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if len(sources.scanned) != 0 {
+		t.Errorf("scanned = %v, want none while a scan is in flight", sources.scanned)
+	}
+}
+
+func TestRenameSkipsWhenARenameIsAlreadyInFlight(t *testing.T) {
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Chan"}}
+	server := scanBusyServer(t, sources, map[jobs.TaskType]bool{jobs.TaskRenameFiles: true})
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/sources/7/rename", nil))
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if len(sources.renamed) != 0 {
+		t.Errorf("renamed = %v, want none while a rename is in flight", sources.renamed)
 	}
 }
 

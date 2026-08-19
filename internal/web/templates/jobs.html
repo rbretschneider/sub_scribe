@@ -11,7 +11,7 @@
     {{if .Finished}}
     <form method="post" action="/jobs/clear"
           onsubmit="return confirm('Clear all {{.Finished}} finished jobs? Queued and running work is left alone.');">
-      <button class="btn btn-ghost" type="submit">Clear finished ({{.Finished}})</button>
+      <button class="btn btn-ghost" type="submit" data-busy="Clearing…">Clear finished ({{.Finished}})</button>
     </form>
     {{end}}
     <a class="btn btn-secondary" href="/jobs{{if .Filter}}?status={{.Filter}}{{end}}">Refresh</a>

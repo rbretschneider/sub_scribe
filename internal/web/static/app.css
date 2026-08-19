@@ -110,6 +110,12 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .btn-ghost:hover { background: var(--surface-2); }
 .btn-danger { background: var(--bad); color: #fff; }
 .btn-danger:hover { filter: brightness(1.06); }
+/* A disabled button reads as unavailable ("Scanning…") and never reacts to hover. */
+.btn:disabled { opacity: 0.55; cursor: not-allowed; pointer-events: none; filter: none; }
+/* is-busy marks a button whose form was just submitted; the pulse says "working". */
+.btn.is-busy { animation: btn-busy 1.4s ease-in-out infinite; }
+@keyframes btn-busy { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .btn.is-busy { animation: none; } }
 
 /* ---- Page head ---- */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }

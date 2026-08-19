@@ -4,12 +4,17 @@
   <a href="/sources">Sources</a> <span aria-hidden="true">/</span> <span aria-current="page">{{if .Source.Name}}{{.Source.Name}}{{else}}Fetching name…{{end}}</span>
 </nav>
 
+<div data-live="5000">
 <div class="page-head">
   <h1>{{if .Source.Name}}{{.Source.Name}}{{else}}Fetching name…{{end}}</h1>
   {{if .Source.Enabled}}<span class="tag tag-on">Active</span>{{else}}<span class="tag tag-off">Paused</span>{{end}}
   <div class="head-actions">
     <form method="post" action="/sources/{{.Source.ID}}/scan">
-      <button class="btn btn-primary" type="submit">Scan now</button>
+      {{if .Scanning}}
+      <button class="btn btn-primary" type="submit" disabled>Scanning…</button>
+      {{else}}
+      <button class="btn btn-primary" type="submit" data-busy="Starting scan…">Scan now</button>
+      {{end}}
     </form>
     <form method="post" action="/sources/{{.Source.ID}}/enabled">
       <input type="hidden" name="enabled" value="{{if .Source.Enabled}}false{{else}}true{{end}}">
@@ -17,11 +22,15 @@
     </form>
     <form method="post" action="/sources/{{.Source.ID}}/retry-failed"
           title="Requeue every failed download for this source within its configured timeframe.">
-      <button class="btn btn-ghost" type="submit">Retry all failed</button>
+      <button class="btn btn-ghost" type="submit" data-busy="Requeuing…">Retry all failed</button>
     </form>
     <form method="post" action="/sources/{{.Source.ID}}/rename"
           title="Move files already downloaded into the layout this source's naming template describes.">
-      <button class="btn btn-ghost" type="submit">Fix file names</button>
+      {{if .Renaming}}
+      <button class="btn btn-ghost" type="submit" disabled>Renaming files…</button>
+      {{else}}
+      <button class="btn btn-ghost" type="submit" data-busy="Starting…">Fix file names</button>
+      {{end}}
     </form>
     <a class="btn btn-secondary" href="/sources/{{.Source.ID}}/edit">Edit</a>
   </div>
@@ -87,8 +96,9 @@
       data-file-count="{{.Stats.Files}}" data-file-size="{{bytes .Stats.Bytes}}">
   <input type="hidden" name="delete_files" value="false">
   <div class="form-actions">
-    <button class="btn btn-danger" type="submit">Delete source</button>
+    <button class="btn btn-danger" type="submit" data-busy="Deleting…">Delete source</button>
     <a class="btn btn-secondary" href="/">Back to dashboard</a>
   </div>
 </form>
+</div>
 {{end}}

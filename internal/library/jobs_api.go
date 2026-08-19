@@ -56,6 +56,10 @@ type JobReader interface {
 	GetJob(ctx context.Context, id int64) (JobListItem, error)
 	// CountsByStatus returns how many jobs sit in each status.
 	CountsByStatus(ctx context.Context) (map[jobs.TaskStatus]int, error)
+	// UnfinishedTypesForSource reports which task types are queued or running for
+	// a source, so a control that would start such work can show it is already
+	// underway instead of silently queuing a duplicate.
+	UnfinishedTypesForSource(ctx context.Context, sourceID int64) (map[jobs.TaskType]bool, error)
 }
 
 // QueueMaintain covers the writes that keep the queue tidy: the user's retry and

@@ -26,7 +26,7 @@
       <a class="btn btn-secondary" href="/profiles/{{.ID}}/edit">Edit</a>
       <form method="post" action="/profiles/{{.ID}}/delete"
             onsubmit="return confirm('Delete this profile? Sources using it will need a new one.');">
-        <button class="btn btn-danger" type="submit">Delete</button>
+        <button class="btn btn-danger" type="submit" data-busy="Deleting…">Delete</button>
       </form>
     </div>
   </li>

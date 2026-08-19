@@ -6,6 +6,7 @@
   <span aria-current="page">{{.Item.Media.Metadata.Title}}</span>
 </nav>
 
+<div data-live="4000">
 <div class="page-head">
   <div>
     <div class="eyebrow">{{.Item.SourceName}}</div>
@@ -15,7 +16,7 @@
   <div class="head-actions">
     {{if .CanRetry}}
     <form method="post" action="/library/{{.Item.Media.ID}}/retry">
-      <button class="btn btn-primary" type="submit">Download again</button>
+      <button class="btn btn-primary" type="submit" data-busy="Queuing…">Download again</button>
     </form>
     {{end}}
     {{if .WatchURL}}<a class="btn btn-secondary" href="{{.WatchURL}}" rel="noopener noreferrer" target="_blank">Open on YouTube</a>{{end}}
@@ -56,4 +57,5 @@
   <p class="description">{{.Item.Media.Metadata.Description}}</p>
 </div>
 {{end}}
+</div>
 {{end}}

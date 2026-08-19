@@ -9,6 +9,7 @@ import (
 
 	"sub_scribe/internal/applog"
 	"sub_scribe/internal/domain"
+	"sub_scribe/internal/jobs"
 	"sub_scribe/internal/library"
 )
 
@@ -305,11 +306,15 @@ func (s *Server) renderSourceForm(w http.ResponseWriter, ctx context.Context, op
 	s.render(w, "source_form", opts.Status, view)
 }
 
-// sourceDetailView is the render model for a single source page.
+// sourceDetailView is the render model for a single source page. Scanning and
+// Renaming reflect work already queued or running, so the buttons that would
+// start it render disabled and say so instead of quietly queuing a duplicate.
 type sourceDetailView struct {
 	baseView
-	Source domain.Source
-	Stats  library.SourceStats
+	Source   domain.Source
+	Stats    library.SourceStats
+	Scanning bool
+	Renaming bool
 	// Retried is set from the ?retried= query parameter so the page can show
 	// a one-time notice after a "Retry all failed" submission.
 	Retried int
@@ -331,25 +336,41 @@ func (s *Server) handleSourceDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load that source", http.StatusInternalServerError)
 		return
 	}
+	scanning, renaming, err := s.sourceWorkInFlight(r.Context(), id)
+	if err != nil {
+		http.Error(w, "could not load that source", http.StatusInternalServerError)
+		return
+	}
 	view := sourceDetailView{
 		baseView: s.newBaseView(source.Name, navSources),
 		Source:   source,
 		Stats:    stats[id],
+		Scanning: scanning,
+		Renaming: renaming,
 		Retried:  queryInt(r, "retried"),
 	}
 	s.render(w, "source_detail", http.StatusOK, view)
 }
 
 // handleSourceScan forces an immediate, out-of-schedule scan of a source and
-// returns to its detail page.
+// returns to its detail page. A scan already queued or running makes this a
+// no-op: the state the user asked for — "a scan is happening" — is already
+// true, so the request succeeds without stacking a duplicate.
 func (s *Server) handleSourceScan(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
-	if err := s.deps.Sources.RequestScan(r.Context(), id); err != nil {
+	scanning, _, err := s.sourceWorkInFlight(r.Context(), id)
+	if err != nil {
 		http.Error(w, "could not start a scan", http.StatusInternalServerError)
 		return
+	}
+	if !scanning {
+		if err := s.deps.Sources.RequestScan(r.Context(), id); err != nil {
+			http.Error(w, "could not start a scan", http.StatusInternalServerError)
+			return
+		}
 	}
 	redirect(w, r, fmt.Sprintf("/sources/%d", id))
 }
@@ -357,14 +378,22 @@ func (s *Server) handleSourceScan(w http.ResponseWriter, r *http.Request) {
 // handleSourceRename brings a source's existing files into line with its current
 // naming template and returns to its detail page. The work runs in the
 // background, so the redirect is immediate and progress shows on the Jobs page.
+// Like scanning, a rename already in flight makes this a no-op.
 func (s *Server) handleSourceRename(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
-	if err := s.deps.Sources.RequestRename(r.Context(), id); err != nil {
+	_, renaming, err := s.sourceWorkInFlight(r.Context(), id)
+	if err != nil {
 		http.Error(w, "could not start renaming", http.StatusInternalServerError)
 		return
+	}
+	if !renaming {
+		if err := s.deps.Sources.RequestRename(r.Context(), id); err != nil {
+			http.Error(w, "could not start renaming", http.StatusInternalServerError)
+			return
+		}
 	}
 	redirect(w, r, fmt.Sprintf("/sources/%d", id))
 }
@@ -383,6 +412,16 @@ func (s *Server) handleSourceRetryFailed(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	redirect(w, r, fmt.Sprintf("/sources/%d?retried=%d", id, n))
+}
+
+// sourceWorkInFlight reports whether a scan or a rename is already queued or
+// running for a source.
+func (s *Server) sourceWorkInFlight(ctx context.Context, id int64) (scanning, renaming bool, err error) {
+	types, err := s.deps.Jobs.UnfinishedTypesForSource(ctx, id)
+	if err != nil {
+		return false, false, err
+	}
+	return types[jobs.TaskIndexSource], types[jobs.TaskRenameFiles], nil
 }
 
 // enabledFormField carries the desired state for the pause/resume control.

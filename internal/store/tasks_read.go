@@ -125,6 +125,29 @@ func (r *TaskRepo) CountsByStatus(ctx context.Context) (map[jobs.TaskStatus]int,
 	return counts, rows.Err()
 }
 
+// UnfinishedTypesForSource returns the task types that are queued or running
+// for a source, which is what lets the UI show "Scanning…" instead of offering
+// to start a second scan.
+func (r *TaskRepo) UnfinishedTypesForSource(ctx context.Context, sourceID int64) (map[jobs.TaskType]bool, error) {
+	rows, err := r.sql.QueryContext(ctx,
+		`SELECT DISTINCT type FROM tasks WHERE source_id = ? AND status IN (?, ?)`,
+		sourceID, jobs.StatusPending, jobs.StatusRunning)
+	if err != nil {
+		return nil, fmt.Errorf("store: unfinished types for source %d: %w", sourceID, err)
+	}
+	defer rows.Close()
+
+	types := make(map[jobs.TaskType]bool)
+	for rows.Next() {
+		var taskType jobs.TaskType
+		if err := rows.Scan(&taskType); err != nil {
+			return nil, fmt.Errorf("store: scan unfinished task type: %w", err)
+		}
+		types[taskType] = true
+	}
+	return types, rows.Err()
+}
+
 // Retry puts a finished task back in the queue for an immediate fresh attempt,
 // clearing the error and the attempt count so the user gets the full retry
 // budget rather than one last try.

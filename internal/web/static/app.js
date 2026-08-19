@@ -13,13 +13,19 @@
     initSponsorBlock();
     initEvents();
     initLiveRefresh();
+    // Order matters: the confirmation must intercept a delete's submit before
+    // the feedback handler marks its button busy, so a cancelled dialog never
+    // leaves a dead button behind.
     initDeleteConfirm();
+    initSubmitFeedback();
   });
 
   // initDeleteConfirm routes every delete form through one confirmation dialog,
   // which states what is being removed and offers to delete the downloaded files
   // too. That option always starts unchecked: losing the records is recoverable,
-  // losing the media is not.
+  // losing the media is not. Listening is delegated to the document so forms
+  // inside a live-refreshed region keep their confirmation after the region's
+  // contents are swapped for fresh markup.
   function initDeleteConfirm() {
     var dialog = document.getElementById("confirm-delete");
     if (!dialog || typeof dialog.showModal !== "function") {
@@ -27,16 +33,18 @@
     }
 
     var pending = null;
-    document.querySelectorAll("form[data-confirm-delete]").forEach(function (form) {
-      form.addEventListener("submit", function (event) {
-        if (form.dataset.confirmed === "true") {
-          return; // second pass, after the user confirmed
-        }
-        event.preventDefault();
-        pending = form;
-        describeTarget(dialog, form);
-        dialog.showModal();
-      });
+    document.addEventListener("submit", function (event) {
+      var form = event.target;
+      if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-confirm-delete")) {
+        return;
+      }
+      if (form.dataset.confirmed === "true") {
+        return; // second pass, after the user confirmed
+      }
+      event.preventDefault();
+      pending = form;
+      describeTarget(dialog, form);
+      dialog.showModal();
     });
 
     dialog.addEventListener("close", function () {
@@ -51,8 +59,67 @@
         field.value = wanted && wanted.checked ? "true" : "false";
       }
       form.dataset.confirmed = "true";
-      form.submit();
+      // requestSubmit rather than submit, so the submit event fires again and
+      // the delete button gets its busy state like every other form's.
+      if (typeof form.requestSubmit === "function") {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
     });
+  }
+
+  // initSubmitFeedback answers every button press immediately: the pressed
+  // submit button disables — so it cannot fire twice — and swaps to its
+  // data-busy label ("Queuing…") when the template provides one. It runs on the
+  // submit event, after any confirmation has allowed the submission through,
+  // and is delegated so buttons inside live-refreshed regions stay covered.
+  function initSubmitFeedback() {
+    document.addEventListener("submit", function (event) {
+      var form = event.target;
+      if (event.defaultPrevented || !(form instanceof HTMLFormElement)) {
+        return;
+      }
+      if (form.method === "dialog") {
+        return; // closing a dialog is instant; there is no wait to signal
+      }
+      markBusy(form);
+    });
+
+    // A page restored from the back/forward cache comes back exactly as it was
+    // left — including a button disabled by a submit that already navigated
+    // away — so busy state is undone rather than trapping the user.
+    window.addEventListener("pageshow", function (event) {
+      if (event.persisted) {
+        document.querySelectorAll("button.is-busy").forEach(clearBusy);
+      }
+    });
+  }
+
+  // markBusy disables a form's submit button and shows its busy label, if any.
+  function markBusy(form) {
+    var button = form.querySelector('button[type="submit"]:not([disabled])');
+    if (!button) {
+      return;
+    }
+    button.disabled = true;
+    button.classList.add("is-busy");
+    button.setAttribute("aria-busy", "true");
+    if (button.dataset.busy) {
+      button.dataset.restoreLabel = button.textContent;
+      button.textContent = button.dataset.busy;
+    }
+  }
+
+  // clearBusy returns a button marked by markBusy to its pressable state.
+  function clearBusy(button) {
+    button.disabled = false;
+    button.classList.remove("is-busy");
+    button.removeAttribute("aria-busy");
+    if (button.dataset.restoreLabel) {
+      button.textContent = button.dataset.restoreLabel;
+      delete button.dataset.restoreLabel;
+    }
   }
 
   // describeTarget fills the dialog with the specific source being deleted, so
@@ -93,8 +160,10 @@
 
   function refreshLiveRegion() {
     // Skip while the tab is hidden: nobody is watching, and it saves the server
-    // a query per tab per tick.
-    if (document.hidden) {
+    // a query per tab per tick. Also skip while the user is mid-action — a
+    // confirmation dialog is open (a swap would replace the form about to be
+    // submitted) or a form was just submitted and navigation is imminent.
+    if (document.hidden || isUserMidAction()) {
       return;
     }
     fetch(window.location.href, { credentials: "same-origin" })
@@ -103,6 +172,13 @@
       })
       .then(swapLiveRegion)
       .catch(function () { /* a dropped poll is not worth surfacing */ });
+  }
+
+  // isUserMidAction reports whether refreshing now would pull the page out from
+  // under an interaction in progress.
+  function isUserMidAction() {
+    return document.querySelector("dialog[open]") !== null ||
+      document.querySelector("button.is-busy") !== null;
   }
 
   function swapLiveRegion(html) {

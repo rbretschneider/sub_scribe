@@ -44,7 +44,7 @@
             data-source-name="{{if .Name}}{{.Name}}{{else}}this source{{end}}"
             data-file-count="{{$stats.Files}}" data-file-size="{{bytes $stats.Bytes}}">
         <input type="hidden" name="delete_files" value="false">
-        <button class="btn btn-danger" type="submit">Delete</button>
+        <button class="btn btn-danger" type="submit" data-busy="Deleting…">Delete</button>
       </form>
     </div>
   </li>
