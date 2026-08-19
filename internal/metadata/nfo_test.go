@@ -43,12 +43,14 @@ func TestBuildEpisodeNFO(t *testing.T) {
 		want       episodeDetails
 	}{
 		{
+			// The plot carries the description with the watch URL appended, so the
+			// link back to the original is available inside the media server.
 			name:       "fully populated",
 			media:      sampleMedia(),
 			sourceName: "My Channel",
 			want: episodeDetails{
 				Title:    "Episode One",
-				Plot:     "A plot description.",
+				Plot:     "A plot description.\n\nhttps://www.youtube.com/watch?v=abc123",
 				Aired:    "2026-03-05",
 				Studio:   "My Channel",
 				UniqueID: uniqueID{Type: uniqueIDType, Value: "abc123"},
@@ -56,6 +58,7 @@ func TestBuildEpisodeNFO(t *testing.T) {
 			},
 		},
 		{
+			// With no description the plot is just the link, never a stray blank line.
 			name: "sub-minute duration truncates to zero",
 			media: domain.Media{
 				ExternalID: "z9",
@@ -68,9 +71,31 @@ func TestBuildEpisodeNFO(t *testing.T) {
 			sourceName: "Src",
 			want: episodeDetails{
 				Title:    "Short",
+				Plot:     "https://www.youtube.com/watch?v=z9",
 				Aired:    "2025-12-31",
 				Studio:   "Src",
 				UniqueID: uniqueID{Type: uniqueIDType, Value: "z9"},
+				Runtime:  0,
+			},
+		},
+		{
+			// Without an external id there is no link to build; the description
+			// stands alone rather than gaining a dangling separator.
+			name: "no external id keeps the bare description",
+			media: domain.Media{
+				Metadata: domain.MediaMetadata{
+					Title:       "Unknown Origin",
+					Description: "Only words.",
+					UploadDate:  time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC),
+				},
+			},
+			sourceName: "Src",
+			want: episodeDetails{
+				Title:    "Unknown Origin",
+				Plot:     "Only words.",
+				Aired:    "2025-12-31",
+				Studio:   "Src",
+				UniqueID: uniqueID{Type: uniqueIDType},
 				Runtime:  0,
 			},
 		},
@@ -123,7 +148,7 @@ func TestBuildMovieNFO(t *testing.T) {
 	got.XMLName = xml.Name{}
 	want := movieDetails{
 		Title:     "Episode One",
-		Plot:      "A plot description.",
+		Plot:      "A plot description.\n\nhttps://www.youtube.com/watch?v=abc123",
 		Year:      2026,
 		Premiered: "2026-03-05",
 		Studio:    "My Channel",

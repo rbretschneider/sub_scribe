@@ -28,10 +28,6 @@ const scanNowPriority = 10
 // re-scan cadence, so every source is polled on a sensible schedule.
 const defaultIndexFrequency = 6 * time.Hour
 
-// youtubeWatchBase is the canonical prefix for a single YouTube video URL; the
-// item's external id is appended to reach its watch page.
-const youtubeWatchBase = "https://www.youtube.com/watch?v="
-
 // errURLRequired is returned by AddSource/UpdateSource when the URL is blank. The
 // name may be blank: it is auto-filled from the channel name on first index.
 var errURLRequired = errors.New("source url must not be empty")
@@ -1135,11 +1131,10 @@ func (s *Service) cookieArgFor(source domain.Source) string {
 	}
 }
 
-// mediaURLFor returns the watch URL for a media item. YouTube is currently the
-// only supported provider, so the item's external id is appended to the watch
-// base.
+// mediaURLFor returns the watch URL for a media item, delegating to the domain
+// so every consumer builds the same link.
 func mediaURLFor(_ domain.Source, media domain.Media) string {
-	return youtubeWatchBase + media.ExternalID
+	return media.WatchURL()
 }
 
 // titleMatcher builds a predicate from a source's title-filter pattern. An empty

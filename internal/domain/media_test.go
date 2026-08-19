@@ -10,6 +10,28 @@ import (
 // filtering, keeping each case focused on a single rule.
 func allowAll(string) bool { return true }
 
+func TestWatchURLBuildsTheWatchPageOrNothing(t *testing.T) {
+	tests := []struct {
+		name       string
+		externalID string
+		want       string
+	}{
+		{name: "a known id resolves to its watch page", externalID: "abc123", want: "https://www.youtube.com/watch?v=abc123"},
+		{name: "an unknown id yields no link", externalID: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := WatchURL(tt.externalID); got != tt.want {
+				t.Errorf("WatchURL(%q) = %q, want %q", tt.externalID, got, tt.want)
+			}
+			media := Media{ExternalID: tt.externalID}
+			if got := media.WatchURL(); got != tt.want {
+				t.Errorf("Media.WatchURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestMediaMetadataPassesFilters(t *testing.T) {
 	cutoff := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	beforeCutoff := time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC)

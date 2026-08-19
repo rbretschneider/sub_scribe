@@ -1266,7 +1266,7 @@ func TestDownloadMediaSuccess(t *testing.T) {
 		t.Fatalf("expected 1 download call, got %d", h.runner.downloadCalls)
 	}
 	// URL built from external id.
-	wantURL := youtubeWatchBase + "abc123"
+	wantURL := domain.WatchURL("abc123")
 	if h.runner.lastURL != wantURL {
 		t.Errorf("expected download url %q, got %q", wantURL, h.runner.lastURL)
 	}

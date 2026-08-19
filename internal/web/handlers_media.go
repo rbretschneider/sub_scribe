@@ -12,10 +12,6 @@ import (
 	"sub_scribe/internal/store"
 )
 
-// youtubeWatchBase is where a video's external id resolves to a watch page, so
-// the UI can offer "open the original" next to a failure.
-const youtubeWatchBase = "https://www.youtube.com/watch?v="
-
 // mediaDetailView is the render model for a single archived item.
 type mediaDetailView struct {
 	baseView
@@ -127,8 +123,5 @@ func canRetryMedia(status domain.MediaStatus) bool {
 // watchURLFor builds the provider watch URL for an external id, or empty when
 // there is no id to link to.
 func watchURLFor(externalID string) string {
-	if externalID == "" {
-		return ""
-	}
-	return youtubeWatchBase + externalID
+	return domain.WatchURL(externalID)
 }

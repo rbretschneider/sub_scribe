@@ -111,7 +111,7 @@ func newMovieDetails(media domain.Media, sourceName string) movieDetails {
 	meta := media.Metadata
 	return movieDetails{
 		Title:     meta.Title,
-		Plot:      meta.Description,
+		Plot:      plotFor(media),
 		Year:      meta.UploadDate.Year(),
 		Premiered: meta.UploadDate.Format(airedDateLayout),
 		Studio:    sourceName,
@@ -127,12 +127,27 @@ func newEpisodeDetails(media domain.Media, sourceName string, numbering SeasonEp
 		Title:    meta.Title,
 		Season:   numbering.Season,
 		Episode:  numbering.Episode,
-		Plot:     meta.Description,
+		Plot:     plotFor(media),
 		Aired:    meta.UploadDate.Format(airedDateLayout),
 		Studio:   sourceName,
 		UniqueID: uniqueID{Type: uniqueIDType, Value: media.ExternalID},
 		Runtime:  runtimeMinutes(meta.Duration),
 	}
+}
+
+// plotFor renders the NFO plot: the video's description with the original
+// watch URL appended as a final line, so the link back to the source is
+// available inside Plex/Jellyfin without leaving the library. A blank line
+// separates the two so the link never runs into the description's last words.
+func plotFor(media domain.Media) string {
+	url := media.WatchURL()
+	if url == "" {
+		return media.Metadata.Description
+	}
+	if media.Metadata.Description == "" {
+		return url
+	}
+	return media.Metadata.Description + "\n\n" + url
 }
 
 // SeasonEpisode is the numbering an episode NFO declares. The zero value means

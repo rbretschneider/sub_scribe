@@ -26,6 +26,26 @@ type Media struct {
 	UpdatedAt    time.Time
 }
 
+// youtubeWatchBase is where a video's external id resolves to a watch page.
+// YouTube is currently the only supported provider.
+const youtubeWatchBase = "https://www.youtube.com/watch?v="
+
+// WatchURL returns the provider watch page for a video's external id, or empty
+// when the id is unknown. It is the single place a watch link is built, so the
+// UI, the downloader, and metadata files can never disagree about it.
+func WatchURL(externalID string) string {
+	if externalID == "" {
+		return ""
+	}
+	return youtubeWatchBase + externalID
+}
+
+// WatchURL returns the provider watch page for this item, or empty when its
+// external id is unknown.
+func (m Media) WatchURL() string {
+	return WatchURL(m.ExternalID)
+}
+
 // MediaMetadata is the descriptive information yt-dlp reports for an item. It is
 // a value object: pure data used by naming, filtering, and metadata-file
 // generation, with no identity of its own.
