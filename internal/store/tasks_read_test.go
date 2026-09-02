@@ -72,6 +72,30 @@ func newQueueFixture(t *testing.T) queueFixture {
 	}
 }
 
+func TestEnqueueBatchQueuesEveryTask(t *testing.T) {
+	f := newQueueFixture(t)
+	ctx := context.Background()
+
+	batch := []jobs.Task{
+		jobs.NewTask(jobs.TaskDownloadMedia, now).ForSource(f.sourceID).ForMedia(f.mediaID),
+		jobs.NewTask(jobs.TaskDownloadMedia, now).ForSource(f.sourceID).ForMedia(f.mediaID),
+	}
+	if err := f.tasks.EnqueueBatch(ctx, batch); err != nil {
+		t.Fatalf("EnqueueBatch: %v", err)
+	}
+	if err := f.tasks.EnqueueBatch(ctx, nil); err != nil {
+		t.Fatalf("EnqueueBatch(nil): %v", err)
+	}
+
+	items, err := f.tasks.ListJobs(ctx, library.JobFilter{})
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
+	if len(items) != len(batch) {
+		t.Fatalf("queued %d tasks, want %d", len(items), len(batch))
+	}
+}
+
 func TestUnfinishedTypesForSourceReportsOnlyThatSourcesLiveWork(t *testing.T) {
 	f := newQueueFixture(t)
 	ctx := context.Background()

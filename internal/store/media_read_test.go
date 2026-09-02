@@ -75,6 +75,58 @@ func TestMediaReadViews(t *testing.T) {
 	}
 }
 
+func TestUpsertBatchRecordsManyItemsAndKeepsUpsertSemantics(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	profile := seedProfile(t, db)
+	source := seedSource(t, db, profile.ID, true, nil)
+	media := db.Media()
+	now := time.Unix(1_700_000_000, 0).UTC()
+
+	item := func(ext, title string) domain.Media {
+		return domain.Media{
+			SourceID: source.ID, ExternalID: ext, Status: domain.MediaPending,
+			Metadata:  domain.MediaMetadata{Title: title},
+			CreatedAt: now, UpdatedAt: now,
+		}
+	}
+
+	ids, err := media.UpsertBatch(ctx, []domain.Media{item("a", "First"), item("b", "Second")})
+	if err != nil {
+		t.Fatalf("UpsertBatch: %v", err)
+	}
+	if len(ids) != 2 {
+		t.Fatalf("ids = %v, want 2", ids)
+	}
+
+	// Re-batching a known item must refresh metadata without minting a new row
+	// or clobbering its download state — the same contract as single Upsert.
+	if err := media.MarkDownloaded(ctx, ids[0], "/media/a.mkv", 42, now); err != nil {
+		t.Fatalf("MarkDownloaded: %v", err)
+	}
+	again, err := media.UpsertBatch(ctx, []domain.Media{item("a", "First, renamed")})
+	if err != nil {
+		t.Fatalf("UpsertBatch(again): %v", err)
+	}
+	if again[0] != ids[0] {
+		t.Errorf("re-upsert id = %d, want the original %d", again[0], ids[0])
+	}
+	got, err := media.Get(ctx, ids[0])
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Metadata.Title != "First, renamed" {
+		t.Errorf("title = %q, want the refreshed one", got.Metadata.Title)
+	}
+	if got.Status != domain.MediaDownloaded || got.FilePath != "/media/a.mkv" {
+		t.Errorf("download state clobbered by batch upsert: %+v", got)
+	}
+
+	if empty, err := media.UpsertBatch(ctx, nil); err != nil || empty != nil {
+		t.Errorf("UpsertBatch(nil) = %v, %v; want nil, nil", empty, err)
+	}
+}
+
 func TestListWithSourceSearchesTitlesAndScopesToASource(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

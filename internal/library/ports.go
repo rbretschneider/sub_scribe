@@ -27,6 +27,10 @@ type SourceRepo interface {
 // external_id) so re-indexing a source never creates duplicates.
 type MediaRepo interface {
 	Upsert(ctx context.Context, media domain.Media) (int64, error)
+	// UpsertBatch records many items in one transaction, returning their ids in
+	// input order — the difference between a scan of a large channel spending
+	// its time on rows or on one commit.
+	UpsertBatch(ctx context.Context, media []domain.Media) ([]int64, error)
 	Get(ctx context.Context, id int64) (domain.Media, error)
 	// FindBySource returns an existing item for the source, so indexing can decide
 	// whether to record a new one or reconsider one already known.
@@ -76,6 +80,9 @@ type ProfileRepo interface {
 // database. jobs.Task is a plain value type, safe to depend on.
 type TaskEnqueuer interface {
 	Enqueue(ctx context.Context, task jobs.Task) (int64, error)
+	// EnqueueBatch inserts many tasks in one transaction, for the scan path
+	// that queues a download per newly discovered video.
+	EnqueueBatch(ctx context.Context, tasks []jobs.Task) error
 }
 
 // MetadataWriter writes a sidecar metadata file (e.g. Kodi/Jellyfin .nfo) next to

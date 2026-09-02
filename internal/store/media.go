@@ -28,27 +28,27 @@ const mediaColumns = `id, source_id, external_id, title, description, uploader,
 	upload_date, duration_seconds, is_short, is_livestream, status, file_path,
 	file_size, attempts, last_error, downloaded_at, created_at, updated_at`
 
-// Upsert inserts a media item or, when one already exists for the same source
-// and external id, refreshes only its metadata columns. It never overwrites the
-// download lifecycle (status, file_path, file_size, downloaded_at) and returns
-// the row's stable id.
-func (r *MediaRepo) Upsert(ctx context.Context, media domain.Media) (int64, error) {
-	var id int64
-	err := r.sql.QueryRowContext(ctx,
-		`INSERT INTO media(source_id, external_id, title, description, uploader,
-			upload_date, duration_seconds, is_short, is_livestream, status, file_path,
-			file_size, attempts, last_error, downloaded_at, created_at, updated_at)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(source_id, external_id) DO UPDATE SET
-			title = excluded.title,
-			description = excluded.description,
-			uploader = excluded.uploader,
-			upload_date = excluded.upload_date,
-			duration_seconds = excluded.duration_seconds,
-			is_short = excluded.is_short,
-			is_livestream = excluded.is_livestream,
-			updated_at = excluded.updated_at
-		 RETURNING id`,
+// upsertMediaSQL inserts a media item or, when one already exists for the same
+// source and external id, refreshes only its metadata columns — never the
+// download lifecycle (status, file_path, file_size, downloaded_at).
+const upsertMediaSQL = `INSERT INTO media(source_id, external_id, title, description, uploader,
+		upload_date, duration_seconds, is_short, is_livestream, status, file_path,
+		file_size, attempts, last_error, downloaded_at, created_at, updated_at)
+	 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	 ON CONFLICT(source_id, external_id) DO UPDATE SET
+		title = excluded.title,
+		description = excluded.description,
+		uploader = excluded.uploader,
+		upload_date = excluded.upload_date,
+		duration_seconds = excluded.duration_seconds,
+		is_short = excluded.is_short,
+		is_livestream = excluded.is_livestream,
+		updated_at = excluded.updated_at
+	 RETURNING id`
+
+// upsertMediaArgs binds a media value to upsertMediaSQL's placeholders.
+func upsertMediaArgs(media domain.Media) []any {
+	return []any{
 		media.SourceID, media.ExternalID, media.Metadata.Title,
 		media.Metadata.Description, media.Metadata.Uploader,
 		toNullUnix(uploadDatePtr(media.Metadata.UploadDate)),
@@ -57,11 +57,50 @@ func (r *MediaRepo) Upsert(ctx context.Context, media domain.Media) (int64, erro
 		media.Status, media.FilePath, media.FileSize, media.Attempts,
 		media.LastError, toNullUnix(media.DownloadedAt),
 		media.CreatedAt.Unix(), media.UpdatedAt.Unix(),
-	).Scan(&id)
-	if err != nil {
+	}
+}
+
+// Upsert records one media item and returns the row's stable id. See
+// upsertMediaSQL for the conflict behaviour.
+func (r *MediaRepo) Upsert(ctx context.Context, media domain.Media) (int64, error) {
+	var id int64
+	if err := r.sql.QueryRowContext(ctx, upsertMediaSQL, upsertMediaArgs(media)...).Scan(&id); err != nil {
 		return 0, fmt.Errorf("store: upsert media: %w", err)
 	}
 	return id, nil
+}
+
+// UpsertBatch records many media items in a single transaction, returning their
+// ids in input order. One commit for a whole scan is what keeps indexing a
+// large channel from spending its time in per-row transaction overhead.
+func (r *MediaRepo) UpsertBatch(ctx context.Context, media []domain.Media) ([]int64, error) {
+	if len(media) == 0 {
+		return nil, nil
+	}
+	tx, err := r.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("store: begin media batch: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+
+	stmt, err := tx.PrepareContext(ctx, upsertMediaSQL)
+	if err != nil {
+		return nil, fmt.Errorf("store: prepare media batch: %w", err)
+	}
+	defer stmt.Close()
+
+	ids := make([]int64, 0, len(media))
+	for _, item := range media {
+		var id int64
+		if err := stmt.QueryRowContext(ctx, upsertMediaArgs(item)...).Scan(&id); err != nil {
+			return nil, fmt.Errorf("store: upsert media %q in batch: %w", item.ExternalID, err)
+		}
+		ids = append(ids, id)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("store: commit media batch: %w", err)
+	}
+	return ids, nil
 }
 
 // SetFilePath records a media file's new location after it has been moved on

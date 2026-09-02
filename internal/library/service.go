@@ -496,15 +496,9 @@ func (s *Service) IndexSource(ctx context.Context, sourceID int64) error {
 	if err := s.autoNameSource(ctx, &source, entries, now); err != nil {
 		return err
 	}
-	added := 0
-	for _, entry := range entries {
-		queued, err := s.indexEntry(ctx, source, entry, matches, now)
-		if err != nil {
-			return err
-		}
-		if queued {
-			added++
-		}
+	added, err := s.recordIndexedEntries(ctx, source, entries, matches, now)
+	if err != nil {
+		return err
 	}
 
 	if err := s.deps.Sources.MarkIndexed(ctx, source.ID, now); err != nil {
@@ -573,41 +567,74 @@ func provisionalName(rawURL string) string {
 	return ""
 }
 
-// indexEntry records one discovered entry as pending media and enqueues its
-// download, unless it is filtered out or already known. It reports whether a
-// download was queued.
-func (s *Service) indexEntry(ctx context.Context, source domain.Source, entry ytdlp.IndexEntry, matches func(string) bool, now time.Time) (bool, error) {
-	meta := metadataFromEntry(entry)
-	if !meta.PassesFilters(source, matches) {
-		return false, nil
-	}
-
-	existing, found, err := s.deps.Media.FindBySource(ctx, source.ID, entry.ExternalID)
+// recordIndexedEntries turns a scan's entries into pending media and queued
+// downloads, reporting how many it queued. Genuinely new items are written as
+// one batch — one media transaction, one task transaction — because on a large
+// channel per-row commits are the whole cost of the scan. Known items are
+// checked against a single up-front listing rather than one query each, and
+// only previously skipped ones are (rarely) requeued.
+func (s *Service) recordIndexedEntries(ctx context.Context, source domain.Source, entries []ytdlp.IndexEntry, matches func(string) bool, now time.Time) (int, error) {
+	existing, err := s.existingByExternalID(ctx, source.ID)
 	if err != nil {
-		return false, fmt.Errorf("check existing media: %w", err)
-	}
-	if found {
-		return s.reconsiderSkipped(ctx, existing, now)
+		return 0, err
 	}
 
-	media := domain.Media{
-		SourceID:   source.ID,
-		ExternalID: entry.ExternalID,
-		Metadata:   meta,
-		Status:     domain.MediaPending,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+	requeued := 0
+	var fresh []domain.Media
+	seen := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		meta := metadataFromEntry(entry)
+		if seen[entry.ExternalID] || !meta.PassesFilters(source, matches) {
+			continue
+		}
+		seen[entry.ExternalID] = true
+
+		if known, ok := existing[entry.ExternalID]; ok {
+			queued, err := s.reconsiderSkipped(ctx, known, now)
+			if err != nil {
+				return requeued, err
+			}
+			if queued {
+				requeued++
+			}
+			continue
+		}
+		fresh = append(fresh, domain.Media{
+			SourceID:   source.ID,
+			ExternalID: entry.ExternalID,
+			Metadata:   meta,
+			Status:     domain.MediaPending,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		})
 	}
-	id, err := s.deps.Media.Upsert(ctx, media)
+
+	ids, err := s.deps.Media.UpsertBatch(ctx, fresh)
 	if err != nil {
-		return false, fmt.Errorf("upsert media: %w", err)
+		return requeued, fmt.Errorf("record indexed media: %w", err)
 	}
+	tasks := make([]jobs.Task, 0, len(ids))
+	for _, id := range ids {
+		tasks = append(tasks, jobs.NewTask(jobs.TaskDownloadMedia, now).ForMedia(id))
+	}
+	if err := s.deps.Tasks.EnqueueBatch(ctx, tasks); err != nil {
+		return requeued, fmt.Errorf("enqueue download tasks: %w", err)
+	}
+	return requeued + len(ids), nil
+}
 
-	task := jobs.NewTask(jobs.TaskDownloadMedia, now).ForMedia(id)
-	if _, err := s.deps.Tasks.Enqueue(ctx, task); err != nil {
-		return false, fmt.Errorf("enqueue download task: %w", err)
+// existingByExternalID loads a source's known items keyed by external id, so a
+// scan can tell new from known with one query instead of one per entry.
+func (s *Service) existingByExternalID(ctx context.Context, sourceID int64) (map[string]domain.Media, error) {
+	known, err := s.deps.Media.ListBySource(ctx, sourceID)
+	if err != nil {
+		return nil, fmt.Errorf("list existing media: %w", err)
 	}
-	return true, nil
+	existing := make(map[string]domain.Media, len(known))
+	for _, item := range known {
+		existing[item.ExternalID] = item
+	}
+	return existing, nil
 }
 
 // reconsiderSkipped re-queues an item that was previously passed over but which

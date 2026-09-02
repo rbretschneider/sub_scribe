@@ -21,16 +21,23 @@ type TaskRepo struct {
 const taskColumns = `id, type, status, source_id, media_id, priority,
 	attempts, max_attempts, last_error, run_after, created_at, updated_at`
 
-// Enqueue inserts a new task and returns its assigned id.
-func (r *TaskRepo) Enqueue(ctx context.Context, task jobs.Task) (int64, error) {
-	res, err := r.sql.ExecContext(ctx,
-		`INSERT INTO tasks(type, status, source_id, media_id, priority,
-			attempts, max_attempts, last_error, run_after, created_at, updated_at)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+// enqueueTaskSQL inserts one queue entry.
+const enqueueTaskSQL = `INSERT INTO tasks(type, status, source_id, media_id, priority,
+		attempts, max_attempts, last_error, run_after, created_at, updated_at)
+	 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+// enqueueTaskArgs binds a task to enqueueTaskSQL's placeholders.
+func enqueueTaskArgs(task jobs.Task) []any {
+	return []any{
 		task.Type, task.Status, toNullID(task.SourceID), toNullID(task.MediaID),
 		task.Priority, task.Attempts, task.MaxAttempts, task.LastError,
 		task.RunAfter.Unix(), task.CreatedAt.Unix(), task.UpdatedAt.Unix(),
-	)
+	}
+}
+
+// Enqueue inserts a new task and returns its assigned id.
+func (r *TaskRepo) Enqueue(ctx context.Context, task jobs.Task) (int64, error) {
+	res, err := r.sql.ExecContext(ctx, enqueueTaskSQL, enqueueTaskArgs(task)...)
 	if err != nil {
 		return 0, fmt.Errorf("store: enqueue task: %w", err)
 	}
@@ -39,6 +46,36 @@ func (r *TaskRepo) Enqueue(ctx context.Context, task jobs.Task) (int64, error) {
 		return 0, fmt.Errorf("store: enqueue task id: %w", err)
 	}
 	return id, nil
+}
+
+// EnqueueBatch inserts many tasks in a single transaction. A scan of a large
+// channel queues a download per new video; one commit for all of them is what
+// keeps that from being the slow part.
+func (r *TaskRepo) EnqueueBatch(ctx context.Context, tasks []jobs.Task) error {
+	if len(tasks) == 0 {
+		return nil
+	}
+	tx, err := r.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: begin task batch: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+
+	stmt, err := tx.PrepareContext(ctx, enqueueTaskSQL)
+	if err != nil {
+		return fmt.Errorf("store: prepare task batch: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, task := range tasks {
+		if _, err := stmt.ExecContext(ctx, enqueueTaskArgs(task)...); err != nil {
+			return fmt.Errorf("store: enqueue task in batch: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store: commit task batch: %w", err)
+	}
+	return nil
 }
 
 // Claim atomically selects the highest-priority runnable task, marks it running,

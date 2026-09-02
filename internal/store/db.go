@@ -34,7 +34,12 @@ type DB struct {
 // background workers; the per-row writes here are far cheaper than the yt-dlp
 // work they coordinate.
 func Open(path string) (*DB, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)", path)
+	// synchronous(NORMAL) with WAL skips the fsync on every commit — the
+	// difference between ~7ms and sub-millisecond per insert, which is the whole
+	// cost of indexing a large channel. In WAL mode NORMAL cannot corrupt the
+	// database; the exposure is only that the very last commits may roll back
+	// after a power cut, and every row here is rediscoverable by the next scan.
+	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)", path)
 	sqlDB, err := sql.Open(driverName, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("store: open %q: %w", path, err)

@@ -120,6 +120,18 @@ func (r *fakeMediaRepo) Upsert(_ context.Context, media domain.Media) (int64, er
 	return media.ID, nil
 }
 
+func (r *fakeMediaRepo) UpsertBatch(ctx context.Context, media []domain.Media) ([]int64, error) {
+	ids := make([]int64, 0, len(media))
+	for _, item := range media {
+		id, err := r.Upsert(ctx, item)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
 func (r *fakeMediaRepo) Get(_ context.Context, id int64) (domain.Media, error) {
 	m, ok := r.items[id]
 	if !ok {
@@ -640,6 +652,15 @@ func (e *fakeTaskEnqueuer) Enqueue(_ context.Context, task jobs.Task) (int64, er
 	task.ID = e.nextID
 	e.tasks = append(e.tasks, task)
 	return task.ID, nil
+}
+
+func (e *fakeTaskEnqueuer) EnqueueBatch(ctx context.Context, tasks []jobs.Task) error {
+	for _, task := range tasks {
+		if _, err := e.Enqueue(ctx, task); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // fakeQueueMaintain is an in-memory QueueMaintain that records the repairs the
