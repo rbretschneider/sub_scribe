@@ -478,6 +478,12 @@ func (s *Service) IndexSource(ctx context.Context, sourceID int64) error {
 		CookiesPath: s.cookieArgFor(source),
 		DateAfter:   cutoffDateArg(source.DownloadCutoff),
 	})
+	if errors.Is(err, ytdlp.ErrThrottled) {
+		slog.WarnContext(ctx, "provider throttling detected during scan; backing off",
+			"source_id", source.ID, "name", source.Name,
+			"until", now.Add(throttleBackoff), "cause", err)
+		return jobs.Defer(now.Add(throttleBackoff), throttledReason)
+	}
 	if err != nil {
 		return fmt.Errorf("index %q: %w", source.URL, err)
 	}
@@ -882,7 +888,34 @@ func (s *Service) recordFailure(ctx context.Context, mediaID int64, media domain
 	if errors.Is(cause, ytdlp.ErrUnavailable) {
 		return s.markUnavailable(ctx, mediaID, media, cause, now)
 	}
+	if errors.Is(cause, ytdlp.ErrThrottled) {
+		return s.deferThrottled(ctx, mediaID, media, cause, now)
+	}
 	return s.recordDownloadFailure(ctx, mediaID, media, cause, now)
+}
+
+// throttleBackoff is how long to stand down after the provider rate-limits or
+// bot-checks us. Long enough to look like a person walking away, short enough
+// that the queue recovers the same day.
+const throttleBackoff = 45 * time.Minute
+
+// throttledReason explains the pause on the job's detail view, so a backed-off
+// task reads as deliberate caution rather than a stall.
+const throttledReason = "provider is rate-limiting us; backing off before trying again"
+
+// deferThrottled stands the task down instead of failing it. A 429 or bot-check
+// is the provider telling us to slow down, and the worst response is spending
+// the retry budget proving it right — the deferral consumes no attempt, and the
+// item returns to pending so the dashboard does not show a download that is not
+// happening.
+func (s *Service) deferThrottled(ctx context.Context, mediaID int64, media domain.Media, cause error, now time.Time) error {
+	if err := s.deps.Media.SetStatus(ctx, mediaID, domain.MediaPending, now); err != nil {
+		return fmt.Errorf("return throttled media to pending: %w", err)
+	}
+	slog.WarnContext(ctx, "provider throttling detected; backing off",
+		"media_id", mediaID, "title", media.Metadata.Title,
+		"until", now.Add(throttleBackoff), "cause", cause)
+	return jobs.Defer(now.Add(throttleBackoff), throttledReason)
 }
 
 // markUnavailable records that the provider refuses to serve this item at all.

@@ -65,6 +65,57 @@ func TestClassifyErrorMarksPermanentFailures(t *testing.T) {
 	}
 }
 
+func TestClassifyErrorMarksThrottling(t *testing.T) {
+	tests := []struct {
+		name          string
+		stderr        string
+		wantThrottled bool
+	}{
+		{
+			name:          "http 429",
+			stderr:        "ERROR: unable to download video data: HTTP Error 429: Too Many Requests",
+			wantThrottled: true,
+		},
+		{
+			name:          "bot check with a straight apostrophe",
+			stderr:        "ERROR: [youtube] abc: Sign in to confirm you're not a bot. This helps protect our community.",
+			wantThrottled: true,
+		},
+		{
+			name:          "bot check with a typographic apostrophe",
+			stderr:        "ERROR: [youtube] abc: Sign in to confirm you’re not a bot.",
+			wantThrottled: true,
+		},
+		{
+			name:          "an ordinary failure is not throttling",
+			stderr:        "ERROR: unable to download video data: <urlopen error timed out>",
+			wantThrottled: false,
+		},
+		{
+			// The age gate also says "sign in", but it is about the video, not us —
+			// it must stay classified as unavailable, not throttled.
+			name:          "age gate stays unavailable",
+			stderr:        "ERROR: [youtube] abc: Sign in to confirm your age.",
+			wantThrottled: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cause := errors.New("exit status 1")
+			got := classifyError(cause, test.stderr)
+
+			if errors.Is(got, ErrThrottled) != test.wantThrottled {
+				t.Fatalf("ErrThrottled = %v, want %v (err: %v)",
+					errors.Is(got, ErrThrottled), test.wantThrottled, got)
+			}
+			if !errors.Is(got, cause) {
+				t.Errorf("classified error lost its cause: %v", got)
+			}
+		})
+	}
+}
+
 func TestClassifyErrorPassesThroughNil(t *testing.T) {
 	if err := classifyError(nil, "Join this channel to get access to members-only content"); err != nil {
 		t.Fatalf("classifyError(nil) = %v, want nil", err)

@@ -16,6 +16,12 @@ import (
 // normal outcome (the item should be marked skipped), not a failure to retry.
 var ErrFilteredOut = errors.New("ytdlp: item skipped by filter")
 
+// ErrThrottled reports that the provider is rate-limiting or bot-checking this
+// client (HTTP 429, "confirm you're not a bot"). The item itself is fine —
+// asking again later will work — but asking again immediately is what turns a
+// slow-down into an account flag, so callers should back off, not retry.
+var ErrThrottled = errors.New("ytdlp: provider is throttling this client")
+
 // ErrUnavailable reports that the provider will not serve this item to us at all:
 // it is members-only, private, removed, or otherwise permanently out of reach.
 // Retrying cannot help, so callers should record it and move on rather than

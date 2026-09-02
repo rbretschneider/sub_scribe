@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -1343,6 +1344,58 @@ func TestDownloadMediaFailure(t *testing.T) {
 	}
 	if h.feed.calls != 0 {
 		t.Errorf("feed should not regenerate on failure")
+	}
+}
+
+func TestDownloadMediaBacksOffWhenThrottled(t *testing.T) {
+	h := newHarness(t)
+	profileID := h.seedProfile(t)
+	src, _ := h.svc.AddSource(context.Background(), validInput(profileID))
+
+	mediaID, _ := h.media.Upsert(context.Background(), domain.Media{
+		SourceID:   src.ID,
+		ExternalID: "abc123",
+		Status:     domain.MediaPending,
+		Metadata:   domain.MediaMetadata{Title: "Cool Video"},
+	})
+	h.runner.downloadErr = fmt.Errorf("%w: HTTP Error 429", ytdlp.ErrThrottled)
+
+	err := h.svc.DownloadMedia(context.Background(), mediaID)
+
+	// A throttled download defers rather than fails: the retry budget is not
+	// spent proving the provider right.
+	var deferral *jobs.Deferral
+	if !errors.As(err, &deferral) {
+		t.Fatalf("expected a jobs.Deferral, got %v", err)
+	}
+	if want := h.now.Add(throttleBackoff); !deferral.RunAfter.Equal(want) {
+		t.Errorf("RunAfter = %v, want %v", deferral.RunAfter, want)
+	}
+
+	got, _ := h.media.Get(context.Background(), mediaID)
+	if got.Status != domain.MediaPending {
+		t.Errorf("expected the item back to pending, got %q", got.Status)
+	}
+	if h.pub.countKind(events.KindMediaFailed) != 0 {
+		t.Errorf("throttling must not be announced as a failure")
+	}
+}
+
+func TestIndexSourceBacksOffWhenThrottled(t *testing.T) {
+	h := newHarness(t)
+	profileID := h.seedProfile(t)
+	src, _ := h.svc.AddSource(context.Background(), validInput(profileID))
+
+	h.runner.indexErr = fmt.Errorf("%w: 429 Too Many Requests", ytdlp.ErrThrottled)
+
+	err := h.svc.IndexSource(context.Background(), src.ID)
+
+	var deferral *jobs.Deferral
+	if !errors.As(err, &deferral) {
+		t.Fatalf("expected a jobs.Deferral, got %v", err)
+	}
+	if want := h.now.Add(throttleBackoff); !deferral.RunAfter.Equal(want) {
+		t.Errorf("RunAfter = %v, want %v", deferral.RunAfter, want)
 	}
 }
 
