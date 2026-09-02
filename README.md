@@ -2,9 +2,9 @@
 
 A lightweight, self-hosted YouTube archiver that syncs to Plex, Jellyfin, and
 Kodi. It tracks channels and playlists, downloads new uploads automatically with
-`yt-dlp`, names files exactly how your media server wants them, and generates
-podcast RSS feeds — all from a single ~20 MB static binary that idles around
-30 MB of RAM.
+`yt-dlp`, saves one-off videos from a pasted link, names files exactly how your
+media server wants them, and serves every source as a podcast RSS feed — all
+from a single ~20 MB static binary that idles around 30 MB of RAM.
 
 It is a ground-up redesign of the ideas in
 [pinchflat](https://github.com/kieraneglin/pinchflat), rebuilt in Go around two
@@ -68,6 +68,11 @@ for you, so you can add a channel immediately: paste a channel or playlist URL,
 choose how far back to download, and save. The scan starts in the background and
 the **Jobs** screen shows it working.
 
+For a single video rather than a whole channel, use **Save a video** in the top
+bar: paste any watch, `youtu.be`, or Shorts link and it downloads immediately,
+landing in a "One-off downloads" show with the same naming, artwork, and
+metadata as everything else.
+
 Files are named the way media servers expect, for example:
 
 ```
@@ -85,7 +90,8 @@ so two videos posted on the same day get distinct episode numbers.
 
 `tvshow.nfo` names the series, and each episode's `.nfo` carries its title, plot,
 air date, runtime, and its season and episode numbers — taken from the filename,
-so the two can never disagree.
+so the two can never disagree. The plot ends with the video's original YouTube
+link, so sharing or re-visiting the source is one click from inside Plex.
 
 `poster.jpg` is the channel's avatar and `fanart.jpg` its banner, downloaded once
 per channel. Each season folder gets the same poster under the name Plex reads
@@ -139,6 +145,18 @@ startup; the images appear in Plex after the next refresh.
 
 Nothing to configure. They read `.nfo` sidecars natively.
 
+### Podcast feeds
+
+Every source is also a podcast: subscribe to
+`http://<host>:<port>/feeds/<source id>` in any podcast app and each archived
+video arrives as an episode. The exact address is shown on the source's page,
+and the feed appears after the source's first download. An **audio-only media
+profile** turns a channel into a true listening feed.
+
+If you've enabled the login (`SUBSCRIBE_USERNAME`/`SUBSCRIBE_PASSWORD`), the
+feeds sit behind it too — most podcast apps accept credentials, or a URL in the
+`http://user:pass@host` form.
+
 ### Upgrading
 
 ```bash
@@ -148,6 +166,10 @@ docker pull ghcr.io/rbretschneider/sub_scribe:latest   # single container
 
 Schema migrations run automatically at startup, and anything already on disk is
 re-adopted, so upgrading never loses your archive.
+
+`yt-dlp` also updates itself at every startup (`SUBSCRIBE_YTDLP_AUTO_UPDATE`
+turns this off), so when YouTube changes something and downloads start failing,
+restarting the container is usually the whole fix — no new image required.
 
 Metadata sidecars are also brought up to date in the background on every start,
 so an archive downloaded by an older version gets whatever the current one
@@ -288,6 +310,11 @@ INFO provider pacing request_delay=2s download_every=8m0s–12m0s call_gap=5s ra
 Anything you pass yourself through a media profile's extra yt-dlp arguments wins
 over these, since yt-dlp takes the last occurrence of a flag.
 
+If YouTube rate-limits or bot-checks anyway (an HTTP 429, or the "confirm you're
+not a bot" page), sub_scribe notices and **stands down for 45 minutes** rather
+than retrying into it — the wait shows on the job's page, no retry attempts are
+spent, and the queue resumes on its own.
+
 ## Configuration
 
 All configuration is via environment variables (sensible defaults shown):
@@ -299,7 +326,7 @@ All configuration is via environment variables (sensible defaults shown):
 | `SUBSCRIBE_TEMP_DIR` | `/var/tmp/sub_scribe` | Scratch space for in-progress downloads (see [Storage](#storage)) |
 | `SUBSCRIBE_DB_PATH` | `<data>/sub_scribe.db` | SQLite database file |
 | `SUBSCRIBE_COOKIES_PATH` | `<data>/cookies.txt` | YouTube cookie file |
-| `SUBSCRIBE_FEED_DIR` | `<data>/feeds` | Generated RSS feeds |
+| `SUBSCRIBE_FEED_DIR` | `<data>/feeds` | Generated RSS feeds, served at `/feeds/<source id>` |
 | `SUBSCRIBE_PORT` | `8080` | HTTP port |
 | `SUBSCRIBE_WORKERS` | `2` | Concurrent background workers |
 | `SUBSCRIBE_JOB_RETENTION_DAYS` | `14` | How long finished jobs stay on the Jobs screen; `0` keeps them forever |
@@ -357,10 +384,15 @@ the media root.
 - Instant add — background indexing and downloading via a durable task queue
 - **Save a video**: paste any single-video link and it downloads into the
   archive immediately, named and tagged like everything else
-- Video or audio-only downloads
+- Media profiles control the how of every download: quality selection, video or
+  audio-only, subtitles (chosen languages, optionally embedded), embedded
+  metadata and thumbnails, periodic re-download to pick up quality upgrades,
+  custom yt-dlp arguments, and a post-download script hook
 - Per-source rules: upload-date cutoff, title regex filter, Shorts and
   livestream inclusion/exclusion
-- Library search, plus filtering by status and by source
+- Library search, plus filtering by status and by source; every source's page
+  lists its videos with live status
+- **Retry all failed** on a source requeues every failed download in one click
 - Plex/Jellyfin/Kodi `.nfo` metadata sidecars, per episode and per series
   (`tvshow.nfo`), kept up to date automatically as sub_scribe changes
 - Channel artwork on disk — series poster, backdrop, and season posters — so a
