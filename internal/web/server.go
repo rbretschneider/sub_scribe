@@ -7,6 +7,8 @@ package web
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"crypto/subtle"
 	"embed"
 	"fmt"
 	"html/template"
@@ -58,8 +60,15 @@ type ServerDeps struct {
 	Media       library.MediaService
 	Logs        LogReader
 	CookiesPath string
-	Clock       jobs.Clock
-	EventsPath  string
+	// FeedDir is where the feed writer puts each source's podcast RSS file,
+	// served read-only at /feeds/{id} so podcast apps can subscribe.
+	FeedDir    string
+	Clock      jobs.Clock
+	EventsPath string
+	// Username and Password, when both set, require HTTP basic auth on every
+	// request. Both empty leaves the server open (a trusted-LAN deployment).
+	Username string
+	Password string
 }
 
 // Server renders the UI and routes HTTP requests. It is safe for concurrent use:
@@ -95,9 +104,46 @@ func NewServer(deps ServerDeps) (*Server, error) {
 	return server, nil
 }
 
-// ServeHTTP satisfies http.Handler by delegating to the configured mux.
+// ServeHTTP satisfies http.Handler by delegating to the configured mux, first
+// enforcing basic auth when credentials are configured.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.mux.ServeHTTP(w, r)
+	s.Protect(s.mux).ServeHTTP(w, r)
+}
+
+// Protect wraps next with the same basic-auth gate the Server applies to its
+// own routes, for handlers mounted beside it (the SSE hub) that must not stay
+// open when the UI is locked.
+func (s *Server) Protect(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.authorized(r) {
+			w.Header().Set("WWW-Authenticate", `Basic realm="sub_scribe", charset="UTF-8"`)
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// authorized reports whether the request may proceed: always when no
+// credentials are configured, otherwise only with the right basic-auth pair.
+// Comparison is by constant-time digest so neither the timing nor the length
+// of the configured secret leaks.
+func (s *Server) authorized(r *http.Request) bool {
+	if s.deps.Username == "" && s.deps.Password == "" {
+		return true
+	}
+	user, pass, ok := r.BasicAuth()
+	if !ok {
+		return false
+	}
+	return digestEqual(user, s.deps.Username) && digestEqual(pass, s.deps.Password)
+}
+
+// digestEqual compares two strings in constant time via their SHA-256 digests.
+func digestEqual(got, want string) bool {
+	gotSum := sha256.Sum256([]byte(got))
+	wantSum := sha256.Sum256([]byte(want))
+	return subtle.ConstantTimeCompare(gotSum[:], wantSum[:]) == 1
 }
 
 // parseTemplates builds one template set per page, each cloning the shared layout

@@ -33,6 +33,9 @@ func TestLoadDefaults(t *testing.T) {
 		Port:          8080,
 		Workers:       2,
 		JobRetention:  14 * 24 * time.Hour,
+		// yt-dlp keeps itself current unless explicitly told not to; the app is
+		// only as healthy as its extractor.
+		YtDlpAutoUpdate: true,
 		// Pacing is on by default; see the note on the defaults in config.go.
 		Throttle: Throttle{
 			RequestDelay:        2 * time.Second,
@@ -207,6 +210,61 @@ func TestLoadInvalidPortAndWorkers(t *testing.T) {
 				t.Fatalf("expected error for %s, got nil", tc.name)
 			}
 		})
+	}
+}
+
+func TestLoadBasicAuthPair(t *testing.T) {
+	cfg, err := Load(fakeEnv(map[string]string{
+		"SUBSCRIBE_USERNAME": "ryan",
+		"SUBSCRIBE_PASSWORD": "hunter2",
+	}))
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.Username != "ryan" || cfg.Password != "hunter2" {
+		t.Errorf("credentials = %q/%q, want ryan/hunter2", cfg.Username, cfg.Password)
+	}
+}
+
+func TestLoadRejectsHalfConfiguredAuth(t *testing.T) {
+	// A username without a password (or vice versa) is a misconfiguration that
+	// would silently leave the app open; it must fail loudly at startup.
+	for _, vars := range []map[string]string{
+		{"SUBSCRIBE_USERNAME": "ryan"},
+		{"SUBSCRIBE_PASSWORD": "hunter2"},
+	} {
+		if _, err := Load(fakeEnv(vars)); err == nil {
+			t.Errorf("Load(%v) accepted a half-configured auth pair", vars)
+		}
+	}
+}
+
+func TestLoadYtDlpAutoUpdateToggle(t *testing.T) {
+	tests := []struct {
+		raw     string
+		want    bool
+		wantErr bool
+	}{
+		{raw: "", want: true},
+		{raw: "false", want: false},
+		{raw: "0", want: false},
+		{raw: "on", want: true},
+		{raw: "sideways", wantErr: true},
+	}
+	for _, test := range tests {
+		cfg, err := Load(fakeEnv(map[string]string{"SUBSCRIBE_YTDLP_AUTO_UPDATE": test.raw}))
+		if test.wantErr {
+			if err == nil {
+				t.Errorf("Load with %q should have failed", test.raw)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("Load with %q: %v", test.raw, err)
+		}
+		if cfg.YtDlpAutoUpdate != test.want {
+			t.Errorf("YtDlpAutoUpdate with %q = %v, want %v", test.raw, cfg.YtDlpAutoUpdate, test.want)
+		}
 	}
 }
 

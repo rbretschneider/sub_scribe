@@ -27,6 +27,13 @@ const (
 	envPort          = "SUBSCRIBE_PORT"
 	envWorkers       = "SUBSCRIBE_WORKERS"
 	envJobRetention  = "SUBSCRIBE_JOB_RETENTION_DAYS"
+	// envUsername/envPassword switch on HTTP basic auth for the whole UI when
+	// both are set. Unset (the default) leaves the app open, which is fine on a
+	// trusted LAN and wrong anywhere else.
+	envUsername = "SUBSCRIBE_USERNAME"
+	envPassword = "SUBSCRIBE_PASSWORD"
+	// envYtDlpUpdate turns off the yt-dlp self-update run at startup.
+	envYtDlpUpdate = "SUBSCRIBE_YTDLP_AUTO_UPDATE"
 
 	// Throttle settings. All are expressed in seconds except the rate limit,
 	// which takes yt-dlp's own notation. Setting any of them to 0 turns that
@@ -122,6 +129,15 @@ type Config struct {
 	// Zero keeps finished jobs forever.
 	JobRetention time.Duration
 
+	// Username and Password, when both set, put the whole UI behind HTTP basic
+	// auth. Both empty (the default) leaves it open for a trusted LAN.
+	Username string
+	Password string
+
+	// YtDlpAutoUpdate runs yt-dlp's self-update once at startup, so YouTube
+	// breakage is fixed by a restart instead of waiting for an image rebuild.
+	YtDlpAutoUpdate bool
+
 	// Throttle paces every call to the provider. See the defaults above for why
 	// it is on by default.
 	Throttle Throttle
@@ -189,7 +205,34 @@ func Load(getenv func(key string) string) (Config, error) {
 	}
 	cfg.Throttle = throttle
 
+	cfg.Username = strings.TrimSpace(getenv(envUsername))
+	cfg.Password = getenv(envPassword)
+	if (cfg.Username == "") != (cfg.Password == "") {
+		return Config{}, fmt.Errorf("config: %s and %s must be set together or not at all",
+			envUsername, envPassword)
+	}
+
+	update, err := boolOr(getenv(envYtDlpUpdate), true, envYtDlpUpdate)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.YtDlpAutoUpdate = update
+
 	return cfg, nil
+}
+
+// boolOr parses an on/off environment value, using fallback when it is unset.
+func boolOr(raw string, fallback bool, key string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "":
+		return fallback, nil
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("config: %s must be a boolean (true/false), got %q", key, raw)
+	}
 }
 
 // loadThrottle resolves the pacing settings, each of which accepts a fractional

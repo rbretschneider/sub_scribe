@@ -218,6 +218,27 @@ func refreshSidecars(ctx context.Context, svc *library.Service, logger *slog.Log
 		"note", "media servers need a metadata refresh to pick these up")
 }
 
+// ytdlpUpdateTimeout bounds the startup self-update. The download is a few
+// megabytes; anything past this is a network problem, not an update in progress.
+const ytdlpUpdateTimeout = 5 * time.Minute
+
+// updateYtDlp brings yt-dlp up to date in the background at startup, so a
+// restart fixes YouTube breakage without waiting for a new image. Failure is
+// logged and life goes on — the current yt-dlp keeps working exactly as well
+// as it did yesterday.
+func updateYtDlp(ctx context.Context, binaryPath string, logger *slog.Logger) {
+	updateCtx, cancel := context.WithTimeout(ctx, ytdlpUpdateTimeout)
+	defer cancel()
+
+	version, err := ytdlp.SelfUpdate(updateCtx, binaryPath)
+	if err != nil {
+		logger.Warn("yt-dlp self-update failed; continuing with the installed version",
+			"error", err, "disable_with", "SUBSCRIBE_YTDLP_AUTO_UPDATE=false")
+		return
+	}
+	logger.Info("yt-dlp is up to date", "version", version)
+}
+
 // rateLimitLabel renders an unset bandwidth cap as a word rather than an empty
 // string, so the startup line reads as a statement either way.
 func rateLimitLabel(limit string) string {
@@ -258,15 +279,20 @@ func buildHTTPHandler(cfg config.Config, deps webDeps) (http.Handler, error) {
 		Queue:       deps.tasks,
 		Logs:        deps.logs,
 		CookiesPath: cfg.CookiesPath,
+		FeedDir:     cfg.FeedDir,
 		Clock:       deps.clock,
 		EventsPath:  eventsPath,
+		Username:    cfg.Username,
+		Password:    cfg.Password,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build web server: %w", err)
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(eventsPath, deps.hub)
+	// The hub is mounted beside the web server, so it needs the same auth gate
+	// or a locked UI would still leak activity through the event stream.
+	mux.Handle(eventsPath, webServer.Protect(deps.hub))
 	mux.Handle("/", webServer)
 	return mux, nil
 }
@@ -296,6 +322,9 @@ func serve(cfg config.Config, db *store.DB, svc *library.Service, clock jobs.Clo
 	go pool.Run(ctx)
 	go sched.Run(ctx)
 	go refreshSidecars(ctx, svc, logger)
+	if cfg.YtDlpAutoUpdate {
+		go updateYtDlp(ctx, cfg.YtDlpPath, logger)
+	}
 
 	server := &http.Server{Addr: ":" + strconv.Itoa(cfg.Port), Handler: handler}
 	go func() {

@@ -55,6 +55,11 @@
   <dt>URL</dt>
   <dd><a href="{{.Source.URL}}" rel="noreferrer">{{.Source.URL}}</a></dd>
 
+  <dt>Podcast feed</dt>
+  <dd><a href="/feeds/{{.Source.ID}}">/feeds/{{.Source.ID}}</a>
+    <span class="field-hint">Subscribe to this address in a podcast app to get every
+      archived video as an episode. The feed appears after the first download.</span></dd>
+
   <dt>Type</dt>
   <dd>{{titleCase (printf "%s" .Source.CollectionType)}}</dd>
 
