@@ -304,6 +304,8 @@ All configuration is via environment variables (sensible defaults shown):
 | `SUBSCRIBE_WORKERS` | `2` | Concurrent background workers |
 | `SUBSCRIBE_JOB_RETENTION_DAYS` | `14` | How long finished jobs stay on the Jobs screen; `0` keeps them forever |
 | `SUBSCRIBE_YTDLP_PATH` | `yt-dlp` | Path to the yt-dlp binary |
+| `SUBSCRIBE_YTDLP_AUTO_UPDATE` | `true` | Update yt-dlp at every startup, so a restart fixes YouTube breakage; `false` disables |
+| `SUBSCRIBE_USERNAME` / `SUBSCRIBE_PASSWORD` | *(none)* | Set both to require a login (HTTP basic auth) on the whole UI — do this before exposing it beyond your LAN |
 | `SUBSCRIBE_APPRISE_BINARY` | `apprise` | Path to Apprise (notifications) |
 | `SUBSCRIBE_APPRISE_URLS` | *(none)* | Comma-separated Apprise URLs |
 | `SUBSCRIBE_POT_PROVIDER_URL` | *(none)* | Base URL of a PO-token provider (skip cookies for most videos) |
@@ -353,16 +355,26 @@ the media root.
 
 - Automatic tracking of channels and playlists, re-scanned on a schedule
 - Instant add — background indexing and downloading via a durable task queue
+- **Save a video**: paste any single-video link and it downloads into the
+  archive immediately, named and tagged like everything else
 - Video or audio-only downloads
 - Per-source rules: upload-date cutoff, title regex filter, Shorts and
   livestream inclusion/exclusion
+- Library search, plus filtering by status and by source
 - Plex/Jellyfin/Kodi `.nfo` metadata sidecars, per episode and per series
   (`tvshow.nfo`), kept up to date automatically as sub_scribe changes
 - Channel artwork on disk — series poster, backdrop, and season posters — so a
   local-metadata agent has pictures to show
-- RSS/podcast feed generation per source
+- Podcast feeds: every source is a subscribable RSS feed at `/feeds/<id>` (the
+  address is on the source's page), so a podcast app can stream the archive
 - SponsorBlock (remove or mark segments), defaulting to sponsors only — removal
   is permanent, so the broader categories are opt-in
+- yt-dlp updates itself at startup, so YouTube breakage is fixed by restarting
+  the container instead of waiting for a new image
+- When YouTube rate-limits or bot-checks, downloads back off for 45 minutes
+  instead of burning retries and drawing more attention
+- Optional login (`SUBSCRIBE_USERNAME`/`SUBSCRIBE_PASSWORD`) for deployments
+  that leave the trusted LAN
 - Retention: auto-delete media older than a configured age
 - Apprise notifications
 - Live UI updates over Server-Sent Events (no page reloads)
