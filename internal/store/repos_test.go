@@ -202,6 +202,16 @@ func TestSourceDueForIndex(t *testing.T) {
 	disabledAt := now.Add(-48 * time.Hour)
 	seedSource(t, db, profile.ID, false, &disabledAt) // stale but disabled
 
+	// The singles bucket tracks no remote collection; even never-indexed it must
+	// not come up for scanning.
+	if _, err := db.Sources().Create(ctx, domain.Source{
+		Name: "One-off downloads", CollectionType: domain.CollectionSingles,
+		MediaProfileID: profile.ID, Enabled: true, IndexFrequency: 6 * time.Hour,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create singles source: %v", err)
+	}
+
 	due, err := db.Sources().DueForIndex(ctx, now)
 	if err != nil {
 		t.Fatalf("DueForIndex: %v", err)

@@ -348,6 +348,10 @@ type sourceDetailView struct {
 	// Items are the source's most recent videos, so its page shows what it has
 	// actually produced rather than only how it is configured.
 	Items []library.MediaListItem
+	// IsSingles marks the app-managed one-off bucket, which has no remote
+	// collection — so the page hides scanning controls and collection settings
+	// that could only mislead.
+	IsSingles bool
 	// Retried is set from the ?retried= query parameter so the page can show
 	// a one-time notice after a "Retry all failed" submission.
 	Retried int
@@ -385,13 +389,14 @@ func (s *Server) handleSourceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := sourceDetailView{
-		baseView: s.newBaseView(source.Name, navSources),
-		Source:   source,
-		Stats:    stats[id],
-		Scanning: scanning,
-		Renaming: renaming,
-		Items:    items,
-		Retried:  queryInt(r, "retried"),
+		baseView:  s.newBaseView(source.Name, navSources),
+		Source:    source,
+		Stats:     stats[id],
+		Scanning:  scanning,
+		Renaming:  renaming,
+		Items:     items,
+		IsSingles: source.CollectionType == domain.CollectionSingles,
+		Retried:   queryInt(r, "retried"),
 	}
 	s.render(w, "source_detail", http.StatusOK, view)
 }

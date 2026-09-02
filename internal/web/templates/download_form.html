@@ -1,0 +1,35 @@
+{{define "title"}}Save a video{{end}}
+{{define "content"}}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Library</div>
+    <h1>Save a video</h1>
+    <p>Paste a link to one YouTube video and sub_scribe downloads it into your
+      archive — named, tagged, and visible in Plex like everything else.</p>
+  </div>
+</div>
+
+{{if .Error}}
+<div class="alert alert-error" role="alert">
+  <p>{{.Error}}</p>
+</div>
+{{end}}
+
+<form class="form" method="post" action="/downloads">
+  <div class="field">
+    <label for="url">Video link</label>
+    <input id="url" name="url" type="url" required value="{{.URL}}"
+           placeholder="https://www.youtube.com/watch?v=…" autofocus>
+    <span class="field-hint">Watch, youtu.be, and Shorts links all work. For a whole
+      channel or playlist, <a href="/sources/new">add a source</a> instead.</span>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit" data-busy="Queuing…">Download</button>
+    <a class="btn btn-secondary" href="/library">Cancel</a>
+  </div>
+</form>
+
+<p class="field-hint">One-off videos are kept in their own “One-off downloads”
+  source, so they get the same naming, artwork, and retry handling as everything
+  sub_scribe archives.</p>
+{{end}}

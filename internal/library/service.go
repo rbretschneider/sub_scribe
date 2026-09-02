@@ -194,8 +194,12 @@ func (s *Service) DeleteSource(ctx context.Context, id int64, opts DeleteSourceO
 // user can force a scan without waiting for the schedule. It confirms the source
 // exists first so a bad id fails loudly instead of queuing dead work.
 func (s *Service) RequestScan(ctx context.Context, id int64) error {
-	if _, err := s.deps.Sources.Get(ctx, id); err != nil {
+	source, err := s.deps.Sources.Get(ctx, id)
+	if err != nil {
 		return fmt.Errorf("get source: %w", err)
+	}
+	if source.CollectionType == domain.CollectionSingles {
+		return nil // nothing to scan: the singles bucket tracks no remote collection
 	}
 	task := jobs.NewTask(jobs.TaskIndexSource, s.deps.Clock.Now()).ForSource(id)
 	task.Priority = scanNowPriority

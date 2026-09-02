@@ -32,6 +32,37 @@ func TestWatchURLBuildsTheWatchPageOrNothing(t *testing.T) {
 	}
 }
 
+func TestParseWatchIDReadsEveryLinkShapeAndRejectsCollections(t *testing.T) {
+	tests := []struct {
+		name   string
+		raw    string
+		wantID string
+		wantOK bool
+	}{
+		{name: "watch link", raw: "https://www.youtube.com/watch?v=gCZOjDar1tU", wantID: "gCZOjDar1tU", wantOK: true},
+		{name: "watch link with extra params", raw: "https://www.youtube.com/watch?v=gCZOjDar1tU&t=42s&list=PLx", wantID: "gCZOjDar1tU", wantOK: true},
+		{name: "short link", raw: "https://youtu.be/gCZOjDar1tU?si=abc", wantID: "gCZOjDar1tU", wantOK: true},
+		{name: "shorts link", raw: "https://www.youtube.com/shorts/gCZOjDar1tU", wantID: "gCZOjDar1tU", wantOK: true},
+		{name: "live link", raw: "https://www.youtube.com/live/gCZOjDar1tU", wantID: "gCZOjDar1tU", wantOK: true},
+		{name: "embed link", raw: "https://www.youtube.com/embed/gCZOjDar1tU", wantID: "gCZOjDar1tU", wantOK: true},
+		{name: "bare id", raw: "gCZOjDar1tU", wantID: "gCZOjDar1tU", wantOK: true},
+		{name: "surrounding whitespace", raw: "  https://youtu.be/gCZOjDar1tU  ", wantID: "gCZOjDar1tU", wantOK: true},
+		{name: "a channel is not a video", raw: "https://www.youtube.com/@Channel5YouTube", wantOK: false},
+		{name: "a playlist is not a video", raw: "https://www.youtube.com/playlist?list=PLx", wantOK: false},
+		{name: "not a url at all", raw: "watch this!", wantOK: false},
+		{name: "empty", raw: "", wantOK: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			id, ok := ParseWatchID(test.raw)
+			if ok != test.wantOK || id != test.wantID {
+				t.Errorf("ParseWatchID(%q) = %q, %v; want %q, %v",
+					test.raw, id, ok, test.wantID, test.wantOK)
+			}
+		})
+	}
+}
+
 func TestMediaMetadataPassesFilters(t *testing.T) {
 	cutoff := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	beforeCutoff := time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC)

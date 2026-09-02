@@ -44,6 +44,7 @@ const layoutTemplate = "layout.html"
 var pageNames = []string{
 	"dashboard", "library", "media_detail", "source_form", "source_detail",
 	"token", "profiles", "profile_form", "sources", "logs", "jobs", "job_detail",
+	"download_form",
 }
 
 // ServerDeps are the collaborators the web layer needs. All are interfaces or

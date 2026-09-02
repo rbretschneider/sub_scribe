@@ -13,9 +13,16 @@ const (
 	CollectionChannel CollectionType = "channel"
 	// CollectionPlaylist is a single ordered playlist.
 	CollectionPlaylist CollectionType = "playlist"
+	// CollectionSingles is the app-managed bucket that holds one-off downloads:
+	// individual videos the user pasted rather than a remote collection. There
+	// is nothing to scan, so the scheduler never indexes it.
+	CollectionSingles CollectionType = "singles"
 )
 
 // IsValid reports whether the collection type is a recognized value.
+// IsValid reports whether the collection type is one a user may create a
+// source with. CollectionSingles is deliberately not included: the singles
+// bucket is created and managed by the app, never submitted through a form.
 func (c CollectionType) IsValid() bool {
 	return c == CollectionChannel || c == CollectionPlaylist
 }

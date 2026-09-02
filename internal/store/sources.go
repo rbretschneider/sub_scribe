@@ -129,14 +129,17 @@ func (r *SourceRepo) Delete(ctx context.Context, id int64) error {
 }
 
 // DueForIndex returns enabled sources that have never been indexed or whose
-// index interval has elapsed as of now, ordered by id.
+// index interval has elapsed as of now, ordered by id. The singles bucket is
+// excluded outright: it tracks no remote collection, so there is nothing a
+// scan of it could ever find.
 func (r *SourceRepo) DueForIndex(ctx context.Context, now time.Time) ([]domain.Source, error) {
 	rows, err := r.sql.QueryContext(ctx,
 		`SELECT `+sourceColumns+` FROM sources
 		 WHERE enabled = 1
+		   AND collection_type != ?
 		   AND (last_indexed_at IS NULL OR last_indexed_at + index_frequency_seconds <= ?)
 		 ORDER BY id ASC`,
-		now.Unix(),
+		domain.CollectionSingles, now.Unix(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("store: due for index: %w", err)

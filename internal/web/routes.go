@@ -40,6 +40,8 @@ const (
 	routeProfileDelete     = "POST /profiles/{id}/delete"
 	routeLogs              = "GET /logs"
 	routeFeed              = "GET /feeds/{id}"
+	routeDownloadNew       = "GET /downloads/new"
+	routeDownloadCreate    = "POST /downloads"
 	routeTokenPage         = "GET /settings/token"
 	routeTokenUpload       = "POST /settings/token"
 	routeStatic            = "GET /static/"
@@ -91,6 +93,8 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc(routeProfileDelete, s.handleProfileDelete)
 	s.mux.HandleFunc(routeLogs, s.handleLogs)
 	s.mux.HandleFunc(routeFeed, s.handleFeed)
+	s.mux.HandleFunc(routeDownloadNew, s.handleDownloadNew)
+	s.mux.HandleFunc(routeDownloadCreate, s.handleDownloadCreate)
 	s.mux.HandleFunc(routeTokenPage, s.handleTokenPage)
 	s.mux.HandleFunc(routeTokenUpload, s.handleTokenUpload)
 	s.mux.Handle(routeStatic, s.static)

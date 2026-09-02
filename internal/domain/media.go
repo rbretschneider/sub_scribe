@@ -1,6 +1,11 @@
 package domain
 
-import "time"
+import (
+	"net/url"
+	"regexp"
+	"strings"
+	"time"
+)
 
 // Media is a single downloadable item (one video or audio track) discovered
 // within a Source. Its lifecycle is tracked by Status so the scheduler can pick
@@ -44,6 +49,51 @@ func WatchURL(externalID string) string {
 // external id is unknown.
 func (m Media) WatchURL() string {
 	return WatchURL(m.ExternalID)
+}
+
+// watchIDPattern matches a YouTube video id: exactly eleven URL-safe base64
+// characters.
+var watchIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+
+// videoPathPrefixes are the URL path shapes that carry the video id as the
+// following segment.
+var videoPathPrefixes = []string{"/shorts/", "/live/", "/embed/"}
+
+// ParseWatchID extracts the video id from any of the URL shapes YouTube hands
+// out for a single video — watch?v=, youtu.be short links, Shorts, live, and
+// embed paths, or a bare id — reporting false for anything else, such as a
+// channel or playlist URL.
+func ParseWatchID(raw string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if watchIDPattern.MatchString(raw) {
+		return raw, true
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", false
+	}
+
+	if strings.EqualFold(parsed.Hostname(), "youtu.be") {
+		return validWatchID(strings.TrimPrefix(parsed.Path, "/"))
+	}
+	if id := parsed.Query().Get("v"); id != "" {
+		return validWatchID(id)
+	}
+	for _, prefix := range videoPathPrefixes {
+		if rest, ok := strings.CutPrefix(parsed.Path, prefix); ok {
+			id, _, _ := strings.Cut(rest, "/")
+			return validWatchID(id)
+		}
+	}
+	return "", false
+}
+
+// validWatchID returns the candidate when it is a well-formed video id.
+func validWatchID(candidate string) (string, bool) {
+	if !watchIDPattern.MatchString(candidate) {
+		return "", false
+	}
+	return candidate, true
 }
 
 // MediaMetadata is the descriptive information yt-dlp reports for an item. It is
