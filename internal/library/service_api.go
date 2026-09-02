@@ -118,14 +118,28 @@ type Overview struct {
 	RetentionQueue []MediaListItem
 }
 
+// MediaQuery narrows a media listing. The zero value returns everything,
+// newest first.
+type MediaQuery struct {
+	// Status limits the listing to one media status; empty means all.
+	Status domain.MediaStatus
+	// SourceID limits the listing to one source's items; zero means all sources.
+	SourceID int64
+	// Search keeps only items whose title contains this text,
+	// case-insensitively; empty keeps everything.
+	Search string
+	// Limit caps the number of rows; zero or less means no cap.
+	Limit int
+}
+
 // LibraryReader serves the read-only views of the archive. The web layer depends
 // on it for the dashboard and library screens.
 type LibraryReader interface {
 	// Overview returns the dashboard summary.
 	Overview(ctx context.Context) (Overview, error)
-	// ListMedia returns media (newest first) optionally filtered to a single
-	// status; an empty status returns all. limit <= 0 means no cap.
-	ListMedia(ctx context.Context, status domain.MediaStatus, limit int) ([]MediaListItem, error)
+	// ListMedia returns media (newest first) narrowed by whatever parts of the
+	// query are set.
+	ListMedia(ctx context.Context, query MediaQuery) ([]MediaListItem, error)
 	// GetMedia returns one item with its source name, for the detail screen.
 	GetMedia(ctx context.Context, id int64) (MediaListItem, error)
 	// SourceStats returns what each source has downloaded, keyed by source id, so

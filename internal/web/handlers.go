@@ -53,13 +53,18 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "dashboard", http.StatusOK, view)
 }
 
-// libraryView is the render model for the media library grid.
+// libraryView is the render model for the media library grid. Search and
+// SourceID/SourceName echo the active narrowing so the form keeps its state and
+// the page can say what it is filtered to.
 type libraryView struct {
 	baseView
-	Items  []library.MediaListItem
-	Total  int
-	Filter string
-	Counts map[string]int
+	Items      []library.MediaListItem
+	Total      int
+	Filter     string
+	Counts     map[string]int
+	Search     string
+	SourceID   int64
+	SourceName string
 }
 
 // libraryFilters maps a query-string filter to a media status ("" = all).
@@ -76,16 +81,23 @@ var libraryFilters = map[string]domain.MediaStatus{
 // libraryPageLimit caps how many videos the library grid loads at once.
 const libraryPageLimit = 120
 
-// handleLibrary renders the grid of archived videos, optionally filtered by status
-// via the ?status= query parameter.
+// handleLibrary renders the grid of archived videos, narrowed by any of
+// ?status=, ?source= (a source id), and ?q= (a title search).
 func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Get("status")
 	status, ok := libraryFilters[filter]
 	if !ok {
 		filter, status = "", ""
 	}
+	search := strings.TrimSpace(r.URL.Query().Get("q"))
+	sourceID, sourceName := s.librarySourceFilter(r)
 
-	items, err := s.deps.Library.ListMedia(r.Context(), status, libraryPageLimit)
+	items, err := s.deps.Library.ListMedia(r.Context(), library.MediaQuery{
+		Status:   status,
+		SourceID: sourceID,
+		Search:   search,
+		Limit:    libraryPageLimit,
+	})
 	if err != nil {
 		http.Error(w, "could not load your library", http.StatusInternalServerError)
 		return
@@ -96,10 +108,13 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := libraryView{
-		baseView: s.newBaseView("Library", navLibrary),
-		Items:    items,
-		Total:    overview.TotalMedia,
-		Filter:   filter,
+		baseView:   s.newBaseView("Library", navLibrary),
+		Items:      items,
+		Total:      overview.TotalMedia,
+		Filter:     filter,
+		Search:     search,
+		SourceID:   sourceID,
+		SourceName: sourceName,
 		Counts: map[string]int{
 			"downloaded":  overview.Counts[domain.MediaDownloaded],
 			"downloading": overview.Counts[domain.MediaDownloading],
@@ -110,6 +125,21 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	s.render(w, "library", http.StatusOK, view)
+}
+
+// librarySourceFilter resolves the ?source= parameter to a source the archive
+// actually has, returning its id and name — or zeroes, so a stale or mistyped
+// id silently widens the view instead of erroring a whole page over a filter.
+func (s *Server) librarySourceFilter(r *http.Request) (int64, string) {
+	id, err := strconv.ParseInt(r.URL.Query().Get("source"), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, ""
+	}
+	source, err := s.deps.Sources.GetSource(r.Context(), id)
+	if err != nil {
+		return 0, ""
+	}
+	return id, source.Name
 }
 
 // logsView is the render model for the log viewer.
@@ -315,10 +345,17 @@ type sourceDetailView struct {
 	Stats    library.SourceStats
 	Scanning bool
 	Renaming bool
+	// Items are the source's most recent videos, so its page shows what it has
+	// actually produced rather than only how it is configured.
+	Items []library.MediaListItem
 	// Retried is set from the ?retried= query parameter so the page can show
 	// a one-time notice after a "Retry all failed" submission.
 	Retried int
 }
+
+// sourceDetailMediaLimit caps the video list on a source's page; the full,
+// searchable listing lives in the library.
+const sourceDetailMediaLimit = 45
 
 // handleSourceDetail shows one source, or 404 if it does not exist.
 func (s *Server) handleSourceDetail(w http.ResponseWriter, r *http.Request) {
@@ -341,12 +378,19 @@ func (s *Server) handleSourceDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load that source", http.StatusInternalServerError)
 		return
 	}
+	items, err := s.deps.Library.ListMedia(r.Context(),
+		library.MediaQuery{SourceID: id, Limit: sourceDetailMediaLimit})
+	if err != nil {
+		http.Error(w, "could not load that source", http.StatusInternalServerError)
+		return
+	}
 	view := sourceDetailView{
 		baseView: s.newBaseView(source.Name, navSources),
 		Source:   source,
 		Stats:    stats[id],
 		Scanning: scanning,
 		Renaming: renaming,
+		Items:    items,
 		Retried:  queryInt(r, "retried"),
 	}
 	s.render(w, "source_detail", http.StatusOK, view)

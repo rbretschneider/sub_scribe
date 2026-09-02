@@ -307,15 +307,15 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 	if err != nil {
 		return Overview{}, fmt.Errorf("overview storage: %w", err)
 	}
-	downloading, err := s.deps.Media.ListWithSource(ctx, domain.MediaDownloading, dashboardListLimit)
+	downloading, err := s.deps.Media.ListWithSource(ctx, MediaQuery{Status: domain.MediaDownloading, Limit: dashboardListLimit})
 	if err != nil {
 		return Overview{}, fmt.Errorf("overview downloading: %w", err)
 	}
-	queued, err := s.deps.Media.ListWithSource(ctx, domain.MediaPending, dashboardListLimit)
+	queued, err := s.deps.Media.ListWithSource(ctx, MediaQuery{Status: domain.MediaPending, Limit: dashboardListLimit})
 	if err != nil {
 		return Overview{}, fmt.Errorf("overview queued: %w", err)
 	}
-	recent, err := s.deps.Media.ListWithSource(ctx, domain.MediaDownloaded, dashboardListLimit)
+	recent, err := s.deps.Media.ListWithSource(ctx, MediaQuery{Status: domain.MediaDownloaded, Limit: dashboardListLimit})
 	if err != nil {
 		return Overview{}, fmt.Errorf("overview recent: %w", err)
 	}
@@ -341,8 +341,8 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 }
 
 // ListMedia returns media newest-first, optionally filtered to a single status.
-func (s *Service) ListMedia(ctx context.Context, status domain.MediaStatus, limit int) ([]MediaListItem, error) {
-	return s.deps.Media.ListWithSource(ctx, status, limit)
+func (s *Service) ListMedia(ctx context.Context, query MediaQuery) ([]MediaListItem, error) {
+	return s.deps.Media.ListWithSource(ctx, query)
 }
 
 // SourceStats returns what each source has downloaded, keyed by source id.

@@ -96,6 +96,38 @@
   {{end}}
 </dl>
 
+<div class="panel table-wrap">
+  <h2 class="panel-title">Videos</h2>
+  {{if .Items}}
+  <table class="table">
+    <caption class="visually-hidden">This source's videos, newest first</caption>
+    <thead>
+      <tr>
+        <th scope="col">Video</th>
+        <th scope="col">Status</th>
+        <th scope="col">Published</th>
+        <th scope="col">Size</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Items}}
+      <tr>
+        <th scope="row" class="job-cell">
+          <a class="job-link" href="/library/{{.Media.ID}}">{{if .Media.Metadata.Title}}{{.Media.Metadata.Title}}{{else}}Untitled video{{end}}</a>
+        </th>
+        <td><span class="status {{statusClass .Media.Status}}"><span class="d"></span>{{statusLabel .Media.Status}}</span></td>
+        <td class="job-when">{{formatDate .Media.Metadata.UploadDate}}</td>
+        <td class="num">{{if .Media.FileSize}}{{bytes .Media.FileSize}}{{else}}—{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  <p class="field-hint"><a href="{{libraryURL "" .Source.ID ""}}">Browse and search all of this source's videos in the library</a></p>
+  {{else}}
+  <p class="muted">Nothing discovered yet — videos appear here after the first scan.</p>
+  {{end}}
+</div>
+
 <form class="form" method="post" action="/sources/{{.Source.ID}}/delete" data-confirm-delete
       data-source-name="{{if .Source.Name}}{{.Source.Name}}{{else}}this source{{end}}"
       data-file-count="{{.Stats.Files}}" data-file-size="{{bytes .Stats.Bytes}}">

@@ -200,6 +200,13 @@ a.dl:hover { background: var(--surface-2); }
 .chip { font-family: var(--mono); font-size: 12px; padding: 7px 13px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
 .chip:hover { color: var(--ink); }
 .chip[aria-current="true"] { background: var(--accent-soft); color: var(--ink); border-color: var(--accent-line); }
+/* chip-clear marks an active narrowing (a source, a search) whose click removes it. */
+.chip-clear { background: var(--accent-soft); color: var(--ink); border-color: var(--accent-line); }
+
+/* ---- Library search ---- */
+.search { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.search-input { font-family: var(--sans); font-size: 14px; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); min-width: 220px; }
+.search-input:focus { border-color: var(--accent); outline: none; }
 .lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 18px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); transition: transform .15s, border-color .15s; }
 .card:hover { transform: translateY(-3px); border-color: var(--accent-line); }

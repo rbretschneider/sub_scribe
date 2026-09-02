@@ -48,8 +48,8 @@ type MediaRepo interface {
 	// TotalDownloadedBytes returns the summed file size of downloaded media.
 	TotalDownloadedBytes(ctx context.Context) (int64, error)
 	// ListWithSource returns media joined to their source name, newest first,
-	// optionally filtered to one status (empty = all). limit <= 0 means no cap.
-	ListWithSource(ctx context.Context, status domain.MediaStatus, limit int) ([]MediaListItem, error)
+	// narrowed by whatever parts of the query are set.
+	ListWithSource(ctx context.Context, query MediaQuery) ([]MediaListItem, error)
 	// ListSlatedForDeletion returns media whose source has a retention policy
 	// and whose file still exists, ordered by soonest-to-expire first.
 	ListSlatedForDeletion(ctx context.Context, limit int) ([]MediaListItem, error)

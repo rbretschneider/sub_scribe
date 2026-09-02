@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"sub_scribe/internal/domain"
@@ -220,18 +221,26 @@ func (r *MediaRepo) TotalDownloadedBytes(ctx context.Context) (int64, error) {
 // ListWithSource returns media joined to their source name, newest first (by
 // download time, falling back to discovery time). An empty status returns every
 // item; limit <= 0 removes the cap.
-func (r *MediaRepo) ListWithSource(ctx context.Context, status domain.MediaStatus, limit int) ([]library.MediaListItem, error) {
+func (r *MediaRepo) ListWithSource(ctx context.Context, q library.MediaQuery) ([]library.MediaListItem, error) {
 	query := `SELECT ` + prefixedMediaColumns + `, s.name
-		FROM media m JOIN sources s ON s.id = m.source_id`
+		FROM media m JOIN sources s ON s.id = m.source_id WHERE 1=1`
 	var args []any
-	if status != "" {
-		query += ` WHERE m.status = ?`
-		args = append(args, status)
+	if q.Status != "" {
+		query += ` AND m.status = ?`
+		args = append(args, q.Status)
+	}
+	if q.SourceID > 0 {
+		query += ` AND m.source_id = ?`
+		args = append(args, q.SourceID)
+	}
+	if q.Search != "" {
+		query += ` AND m.title LIKE ? ESCAPE '\' COLLATE NOCASE`
+		args = append(args, "%"+escapeLike(q.Search)+"%")
 	}
 	query += ` ORDER BY COALESCE(m.downloaded_at, m.created_at) DESC, m.id DESC`
-	if limit > 0 {
+	if q.Limit > 0 {
 		query += ` LIMIT ?`
-		args = append(args, limit)
+		args = append(args, q.Limit)
 	}
 
 	rows, err := r.sql.QueryContext(ctx, query, args...)
@@ -249,6 +258,13 @@ func (r *MediaRepo) ListWithSource(ctx context.Context, status domain.MediaStatu
 		items = append(items, library.MediaListItem{Media: media, SourceName: sourceName})
 	}
 	return items, rows.Err()
+}
+
+// escapeLike neutralises LIKE's wildcard characters in user-typed search text,
+// so a search for "100%" matches that literal text rather than everything.
+func escapeLike(text string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return replacer.Replace(text)
 }
 
 // ListSlatedForDeletion returns media whose source has retention_after > 0,

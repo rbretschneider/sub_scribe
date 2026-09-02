@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"sub_scribe/internal/domain"
+	"sub_scribe/internal/library"
 )
 
 func TestMediaReadViews(t *testing.T) {
@@ -46,7 +47,7 @@ func TestMediaReadViews(t *testing.T) {
 		t.Errorf("TotalDownloadedBytes = %d, want 3000", total)
 	}
 
-	all, err := media.ListWithSource(ctx, "", 0)
+	all, err := media.ListWithSource(ctx, library.MediaQuery{})
 	if err != nil {
 		t.Fatalf("ListWithSource(all): %v", err)
 	}
@@ -57,7 +58,7 @@ func TestMediaReadViews(t *testing.T) {
 		t.Errorf("SourceName = %q, want %q", all[0].SourceName, source.Name)
 	}
 
-	downloaded, err := media.ListWithSource(ctx, domain.MediaDownloaded, 0)
+	downloaded, err := media.ListWithSource(ctx, library.MediaQuery{Status: domain.MediaDownloaded})
 	if err != nil {
 		t.Fatalf("ListWithSource(downloaded): %v", err)
 	}
@@ -65,11 +66,60 @@ func TestMediaReadViews(t *testing.T) {
 		t.Errorf("downloaded filter len = %d, want 2", len(downloaded))
 	}
 
-	limited, err := media.ListWithSource(ctx, "", 1)
+	limited, err := media.ListWithSource(ctx, library.MediaQuery{Limit: 1})
 	if err != nil {
 		t.Fatalf("ListWithSource(limit): %v", err)
 	}
 	if len(limited) != 1 {
 		t.Errorf("limited len = %d, want 1", len(limited))
+	}
+}
+
+func TestListWithSourceSearchesTitlesAndScopesToASource(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	profile := seedProfile(t, db)
+	source := seedSource(t, db, profile.ID, true, nil)
+	other := seedSource(t, db, profile.ID, true, nil)
+	media := db.Media()
+	now := time.Unix(1_700_000_000, 0).UTC()
+
+	insert := func(sourceID int64, ext, title string) {
+		if _, err := media.Upsert(ctx, domain.Media{
+			SourceID: sourceID, ExternalID: ext, Status: domain.MediaDownloaded,
+			Metadata:  domain.MediaMetadata{Title: title},
+			CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", ext, err)
+		}
+	}
+	insert(source.ID, "a", "GPS Hidden Messages")
+	insert(source.ID, "b", "The 100% Solution")
+	insert(other.ID, "c", "GPS on the Other Channel")
+
+	bySource, err := media.ListWithSource(ctx, library.MediaQuery{SourceID: source.ID})
+	if err != nil {
+		t.Fatalf("ListWithSource(source): %v", err)
+	}
+	if len(bySource) != 2 {
+		t.Errorf("source filter len = %d, want 2", len(bySource))
+	}
+
+	// Case-insensitive, and scoped by the source filter at the same time.
+	found, err := media.ListWithSource(ctx, library.MediaQuery{SourceID: source.ID, Search: "gps"})
+	if err != nil {
+		t.Fatalf("ListWithSource(search): %v", err)
+	}
+	if len(found) != 1 || found[0].Media.ExternalID != "a" {
+		t.Errorf("search hit = %+v, want the one GPS video in this source", found)
+	}
+
+	// LIKE wildcards in the typed text must match literally, not everything.
+	literal, err := media.ListWithSource(ctx, library.MediaQuery{Search: "100%"})
+	if err != nil {
+		t.Fatalf("ListWithSource(literal): %v", err)
+	}
+	if len(literal) != 1 || literal[0].Media.ExternalID != "b" {
+		t.Errorf("literal %% search = %+v, want only The 100%% Solution", literal)
 	}
 }

@@ -162,12 +162,16 @@ type fakeLibrary struct {
 	stats  map[int64]library.SourceStats
 	// retryCount is returned by RetryAllFailed; tests set it per case.
 	retryCount int
+	// lastQuery records what the handler asked for, so tests assert the query
+	// carried the user's narrowing.
+	lastQuery library.MediaQuery
 }
 
 func (f *fakeLibrary) Overview(context.Context) (library.Overview, error) {
 	return f.overview, nil
 }
-func (f *fakeLibrary) ListMedia(context.Context, domain.MediaStatus, int) ([]library.MediaListItem, error) {
+func (f *fakeLibrary) ListMedia(_ context.Context, q library.MediaQuery) ([]library.MediaListItem, error) {
+	f.lastQuery = q
 	return f.media, nil
 }
 func (f *fakeLibrary) SourceStats(context.Context) (map[int64]library.SourceStats, error) {
@@ -470,6 +474,72 @@ func TestTokenUploadLoggedOutShowsErrorAndKeepsExistingFile(t *testing.T) {
 	}
 	if string(after) != good {
 		t.Errorf("existing good file was overwritten; got %q", after)
+	}
+}
+
+func TestLibraryPassesSearchAndSourceNarrowingToTheQuery(t *testing.T) {
+	lib := &fakeLibrary{}
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Cool Channel"}}
+	server := newTestServerFull(t, sources, &fakeProfiles{}, lib, filepath.Join(t.TempDir(), "c.txt"))
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
+		"/library?status=failed&source=7&q=gps", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	q := lib.lastQuery
+	if q.Status != domain.MediaFailed || q.SourceID != 7 || q.Search != "gps" {
+		t.Errorf("query = %+v, want failed/source 7/gps", q)
+	}
+	body := rec.Body.String()
+	// The active narrowing is visible and clearable.
+	if !strings.Contains(body, "Cool Channel") {
+		t.Error("the source filter chip should name the source")
+	}
+	if !strings.Contains(body, `value="gps"`) {
+		t.Error("the search box should keep the typed query")
+	}
+}
+
+func TestLibraryIgnoresAnUnknownSourceFilter(t *testing.T) {
+	lib := &fakeLibrary{}
+	sources := &fakeSources{getErr: errors.New("not found")}
+	server := newTestServerFull(t, sources, &fakeProfiles{}, lib, filepath.Join(t.TempDir(), "c.txt"))
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/library?source=99", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (filter dropped, page still renders)", rec.Code)
+	}
+	if lib.lastQuery.SourceID != 0 {
+		t.Errorf("SourceID = %d, want 0 for an unknown source", lib.lastQuery.SourceID)
+	}
+}
+
+func TestSourceDetailListsTheSourcesVideos(t *testing.T) {
+	lib := &fakeLibrary{media: []library.MediaListItem{{
+		Media: domain.Media{ID: 42, SourceID: 7, Status: domain.MediaDownloaded,
+			Metadata: domain.MediaMetadata{Title: "GPS Hidden Messages"}},
+		SourceName: "Cool Channel",
+	}}}
+	sources := &fakeSources{getResult: domain.Source{ID: 7, Name: "Cool Channel", Enabled: true}}
+	server := newTestServerFull(t, sources, &fakeProfiles{}, lib, filepath.Join(t.TempDir(), "c.txt"))
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sources/7", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "GPS Hidden Messages") || !strings.Contains(body, `href="/library/42"`) {
+		t.Error("source detail should list the source's videos with links")
+	}
+	if lib.lastQuery.SourceID != 7 {
+		t.Errorf("videos were not scoped to the source: query = %+v", lib.lastQuery)
 	}
 }
 

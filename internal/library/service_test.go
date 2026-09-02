@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -261,14 +262,20 @@ func (r *fakeMediaRepo) GetWithSource(_ context.Context, id int64) (MediaListIte
 	return MediaListItem{Media: m, SourceName: "Test Source"}, nil
 }
 
-func (r *fakeMediaRepo) ListWithSource(_ context.Context, status domain.MediaStatus, limit int) ([]MediaListItem, error) {
+func (r *fakeMediaRepo) ListWithSource(_ context.Context, q MediaQuery) ([]MediaListItem, error) {
 	var items []MediaListItem
 	for _, m := range r.items {
-		if status != "" && m.Status != status {
+		if q.Status != "" && m.Status != q.Status {
+			continue
+		}
+		if q.SourceID > 0 && m.SourceID != q.SourceID {
+			continue
+		}
+		if q.Search != "" && !strings.Contains(strings.ToLower(m.Metadata.Title), strings.ToLower(q.Search)) {
 			continue
 		}
 		items = append(items, MediaListItem{Media: m, SourceName: "Test Source"})
-		if limit > 0 && len(items) >= limit {
+		if q.Limit > 0 && len(items) >= q.Limit {
 			break
 		}
 	}

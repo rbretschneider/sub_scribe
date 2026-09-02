@@ -125,11 +125,11 @@ func TestScaleOfReadPaths(t *testing.T) {
 		return err
 	})
 	timed(t, "library: first page (120)", pageBudget, func() error {
-		_, err := media.ListWithSource(ctx, "", 120)
+		_, err := media.ListWithSource(ctx, library.MediaQuery{Limit: 120})
 		return err
 	})
 	timed(t, "library: filtered page (120)", pageBudget, func() error {
-		_, err := media.ListWithSource(ctx, domain.MediaDownloaded, 120)
+		_, err := media.ListWithSource(ctx, library.MediaQuery{Status: domain.MediaDownloaded, Limit: 120})
 		return err
 	})
 	timed(t, "jobs: first page (200)", pageBudget, func() error {

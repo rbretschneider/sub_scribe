@@ -3,6 +3,8 @@ package web
 import (
 	"html/template"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -115,8 +117,28 @@ func templateFuncs() template.FuncMap {
 		"thumb":          thumbGradient,
 		"logTime":        logTimeFormat,
 		"lower":          strings.ToLower,
+		"libraryURL":     libraryURL,
 		"retentionDelta": retentionDelta,
 	}
+}
+
+// libraryURL builds a /library address carrying the given narrowing, omitting
+// whatever is unset, so each filter link can preserve the others' state.
+func libraryURL(status string, sourceID int64, search string) string {
+	values := url.Values{}
+	if status != "" {
+		values.Set("status", status)
+	}
+	if sourceID > 0 {
+		values.Set("source", strconv.FormatInt(sourceID, 10))
+	}
+	if search != "" {
+		values.Set("q", search)
+	}
+	if len(values) == 0 {
+		return "/library"
+	}
+	return "/library?" + values.Encode()
 }
 
 // baseView carries the fields the shared layout needs on every page.
