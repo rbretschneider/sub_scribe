@@ -101,7 +101,7 @@ func healthyView(view tokenView, a cookies.Assessment) tokenView {
 // handleTokenPage renders the connect-your-account instructions plus the current
 // assessment and the drag-and-drop upload zone.
 func (s *Server) handleTokenPage(w http.ResponseWriter, r *http.Request) {
-	s.renderToken(w, http.StatusOK, s.assessToken())
+	s.renderToken(w, r, http.StatusOK, s.assessToken())
 }
 
 // handleTokenUpload accepts a multipart cookies.txt, validating it before it can
@@ -110,28 +110,28 @@ func (s *Server) handleTokenPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTokenUpload(w http.ResponseWriter, r *http.Request) {
 	data, err := readUpload(r)
 	if err != nil {
-		s.renderTokenError(w, "We couldn't read that upload — please choose your cookies.txt file and try again.")
+		s.renderTokenError(w, r, "We couldn't read that upload — please choose your cookies.txt file and try again.")
 		return
 	}
 	jar, err := cookies.Parse(bytes.NewReader(data))
 	if err != nil {
-		s.renderTokenError(w, "That file isn't a valid cookies.txt export — re-export it with the cookie extension and try again.")
+		s.renderTokenError(w, r, "That file isn't a valid cookies.txt export — re-export it with the cookie extension and try again.")
 		return
 	}
 	if jar.Assess(s.deps.Clock.Now()).Health == cookies.HealthNoLogin {
-		s.renderTokenError(w, "This file has no YouTube login in it — did you export while logged out? Sign in to YouTube, then export again.")
+		s.renderTokenError(w, r, "This file has no YouTube login in it — did you export while logged out? Sign in to YouTube, then export again.")
 		return
 	}
-	s.saveToken(w, data)
+	s.saveToken(w, r, data)
 }
 
 // saveToken persists validated cookie bytes and re-renders the now-connected page.
-func (s *Server) saveToken(w http.ResponseWriter, data []byte) {
+func (s *Server) saveToken(w http.ResponseWriter, r *http.Request, data []byte) {
 	if err := os.WriteFile(s.deps.CookiesPath, data, cookiesFileMode); err != nil {
-		s.renderTokenError(w, "We validated your login but couldn't save it. Check the app's storage permissions and try again.")
+		s.renderTokenError(w, r, "We validated your login but couldn't save it. Check the app's storage permissions and try again.")
 		return
 	}
-	s.renderToken(w, http.StatusOK, s.viewForBytes(data))
+	s.renderToken(w, r, http.StatusOK, s.viewForBytes(data))
 }
 
 // readUpload extracts the raw bytes of the cookie file field, bounding the read.
@@ -158,16 +158,16 @@ type tokenPageView struct {
 }
 
 // renderToken renders the token page with the given assessment.
-func (s *Server) renderToken(w http.ResponseWriter, status int, token tokenView) {
-	base := s.newBaseView("Connect your YouTube account", navToken)
+func (s *Server) renderToken(w http.ResponseWriter, r *http.Request, status int, token tokenView) {
+	base := s.newBaseView(r, "Connect your YouTube account", navToken)
 	base.Token = token
 	s.render(w, "token", status, tokenPageView{baseView: base, Token: token})
 }
 
 // renderTokenError re-renders the token page (200) with a friendly error and the
 // current, unchanged assessment, so a failed upload never dead-ends.
-func (s *Server) renderTokenError(w http.ResponseWriter, message string) {
+func (s *Server) renderTokenError(w http.ResponseWriter, r *http.Request, message string) {
 	token := s.assessToken()
 	token.Error = message
-	s.renderToken(w, http.StatusOK, token)
+	s.renderToken(w, r, http.StatusOK, token)
 }

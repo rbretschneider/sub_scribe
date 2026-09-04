@@ -61,7 +61,7 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	view := jobsView{
-		baseView: s.newBaseView("Jobs", navJobs),
+		baseView: s.newBaseView(r, "Jobs", navJobs),
 		Items:    items,
 		Filter:   filter,
 		Counts: map[string]int{
@@ -106,7 +106,7 @@ func (s *Server) handleJobDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	view := jobDetailView{
-		baseView:  s.newBaseView("Job "+strconv.FormatInt(id, 10), navJobs),
+		baseView:  s.newBaseView(r, "Job "+strconv.FormatInt(id, 10), navJobs),
 		Job:       job,
 		Logs:      s.deps.Logs.ForTask(id, jobLogLimit),
 		CanRetry:  isFinished(job.Task.Status),

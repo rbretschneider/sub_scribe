@@ -44,7 +44,20 @@ const (
 	routeDownloadCreate    = "POST /downloads"
 	routeTokenPage         = "GET /settings/token"
 	routeTokenUpload       = "POST /settings/token"
+	routeLogin             = "GET " + loginPath
+	routeOIDCStart         = "GET " + oidcStartPath
+	routeOIDCCallback      = "GET " + oidcCallbackPath
+	routeLogout            = "POST " + logoutPath
 	routeStatic            = "GET /static/"
+)
+
+// Auth paths, shared between the route table and the gate's public-path and
+// redirect logic so the two can never drift.
+const (
+	loginPath        = "/auth/login"
+	oidcStartPath    = "/auth/oidc/start"
+	oidcCallbackPath = "/auth/oidc/callback"
+	logoutPath       = "/auth/logout"
 )
 
 // staticPrefix is stripped before the embedded file server resolves an asset.
@@ -97,6 +110,10 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc(routeDownloadCreate, s.handleDownloadCreate)
 	s.mux.HandleFunc(routeTokenPage, s.handleTokenPage)
 	s.mux.HandleFunc(routeTokenUpload, s.handleTokenUpload)
+	s.mux.HandleFunc(routeLogin, s.handleLogin)
+	s.mux.HandleFunc(routeOIDCStart, s.handleOIDCStart)
+	s.mux.HandleFunc(routeOIDCCallback, s.handleOIDCCallback)
+	s.mux.HandleFunc(routeLogout, s.handleLogout)
 	s.mux.Handle(routeStatic, s.static)
 }
 
@@ -151,16 +168,20 @@ type baseView struct {
 	ActiveNav  string
 	EventsPath string
 	Token      tokenView
+	// HasSession shows the sign-out button only to a browser that signed in
+	// through SSO — basic-auth and open deployments have nothing to sign out of.
+	HasSession bool
 }
 
 // newBaseView assembles the layout data, including the current token badge so it
 // appears in the nav on every page.
-func (s *Server) newBaseView(title, nav string) baseView {
+func (s *Server) newBaseView(r *http.Request, title, nav string) baseView {
 	return baseView{
 		Title:      title,
 		ActiveNav:  nav,
 		EventsPath: s.deps.EventsPath,
 		Token:      s.assessToken(),
+		HasSession: s.oidcConfigured() && s.hasValidSession(r),
 	}
 }
 

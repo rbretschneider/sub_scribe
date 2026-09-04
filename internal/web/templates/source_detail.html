@@ -68,9 +68,14 @@
   {{end}}
 
   <dt>Podcast feed</dt>
-  <dd><a href="/feeds/{{.Source.ID}}">/feeds/{{.Source.ID}}</a>
-    <span class="field-hint">Subscribe to this address in a podcast app to get every
-      archived video as an episode. The feed appears after the first download.</span></dd>
+  {{/* The token in the URL is what authorizes a podcast app when the UI is
+       behind a login — apps can't sign in, so the address is the key. */}}
+  <dd>{{if .Source.FeedToken}}<a href="/feeds/{{.Source.ID}}?t={{.Source.FeedToken}}">/feeds/{{.Source.ID}}?t={{.Source.FeedToken}}</a>
+    {{else}}<a href="/feeds/{{.Source.ID}}">/feeds/{{.Source.ID}}</a>
+    {{end}}<span class="field-hint">Subscribe to this address in a podcast app to get every
+      archived video as an episode. The feed appears after the first download.
+      Treat the address as a secret — the token in it is what lets a podcast app
+      in when the app is behind a login.</span></dd>
 
   <dt>Type</dt>
   <dd>{{titleCase (printf "%s" .Source.CollectionType)}}</dd>

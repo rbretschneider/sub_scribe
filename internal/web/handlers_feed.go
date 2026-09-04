@@ -10,6 +10,15 @@ import (
 // feedContentType is the media type podcast apps expect for an RSS document.
 const feedContentType = "application/rss+xml; charset=utf-8"
 
+// feedPathPrefix is the feed route's path prefix, shared with the auth gate's
+// feed-token check so the two can never drift.
+const feedPathPrefix = "/feeds/"
+
+// feedTokenParam is the query parameter carrying a source's feed capability
+// token (/feeds/{id}?t=<token>), which authorizes podcast apps that cannot
+// complete a browser login.
+const feedTokenParam = "t"
+
 // handleFeed serves one source's podcast RSS feed, so a podcast app can
 // subscribe to the channel and receive every archived video as an episode.
 //

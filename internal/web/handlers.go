@@ -38,7 +38,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := dashboardView{
-		baseView:       s.newBaseView("Dashboard", navDashboard),
+		baseView:       s.newBaseView(r, "Dashboard", navDashboard),
 		Sources:        overview.SourceCount,
 		Archived:       overview.Counts[domain.MediaDownloaded],
 		Downloading:    overview.Counts[domain.MediaDownloading],
@@ -108,7 +108,7 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := libraryView{
-		baseView:   s.newBaseView("Library", navLibrary),
+		baseView:   s.newBaseView(r, "Library", navLibrary),
 		Items:      items,
 		Total:      overview.TotalMedia,
 		Filter:     filter,
@@ -154,7 +154,7 @@ const logsPageLimit = 500
 // handleLogs renders the most recent application log records, newest first.
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	view := logsView{
-		baseView: s.newBaseView("Logs", navLogs),
+		baseView: s.newBaseView(r, "Logs", navLogs),
 		Records:  s.deps.Logs.Recent(logsPageLimit),
 	}
 	s.render(w, "logs", http.StatusOK, view)
@@ -186,7 +186,7 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := sourcesView{
-		baseView:     s.newBaseView("Sources", navSources),
+		baseView:     s.newBaseView(r, "Sources", navSources),
 		Sources:      sources,
 		Stats:        stats,
 		LargestBytes: largestSourceBytes(stats),
@@ -232,7 +232,7 @@ type sourceFormOptions struct {
 
 // handleSourceNew renders the empty add-source form.
 func (s *Server) handleSourceNew(w http.ResponseWriter, r *http.Request) {
-	s.renderSourceForm(w, r.Context(), sourceFormOptions{
+	s.renderSourceForm(w, r, sourceFormOptions{
 		Heading:     "Add a source",
 		Action:      "/sources",
 		SubmitLabel: "Add source",
@@ -249,12 +249,12 @@ func (s *Server) handleSourceCreate(w http.ResponseWriter, r *http.Request) {
 	input, err := values.toInput()
 	if err != nil {
 		opts.Message = err.Error()
-		s.renderSourceForm(w, r.Context(), opts)
+		s.renderSourceForm(w, r, opts)
 		return
 	}
 	if _, err := s.deps.Sources.AddSource(r.Context(), input); err != nil {
 		opts.Message = "We couldn't save this source. Please try again."
-		s.renderSourceForm(w, r.Context(), opts)
+		s.renderSourceForm(w, r, opts)
 		return
 	}
 	redirect(w, r, "/")
@@ -271,7 +271,7 @@ func (s *Server) handleSourceEdit(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	s.renderSourceForm(w, r.Context(), sourceFormOptions{
+	s.renderSourceForm(w, r, sourceFormOptions{
 		Heading:     "Edit source",
 		Action:      fmt.Sprintf("/sources/%d", id),
 		SubmitLabel: "Save changes",
@@ -298,12 +298,12 @@ func (s *Server) handleSourceUpdate(w http.ResponseWriter, r *http.Request) {
 	input, err := values.toInput()
 	if err != nil {
 		opts.Message = err.Error()
-		s.renderSourceForm(w, r.Context(), opts)
+		s.renderSourceForm(w, r, opts)
 		return
 	}
 	if _, err := s.deps.Sources.UpdateSource(r.Context(), id, input); err != nil {
 		opts.Message = "We couldn't save your changes. Please try again."
-		s.renderSourceForm(w, r.Context(), opts)
+		s.renderSourceForm(w, r, opts)
 		return
 	}
 	redirect(w, r, fmt.Sprintf("/sources/%d", id))
@@ -311,7 +311,8 @@ func (s *Server) handleSourceUpdate(w http.ResponseWriter, r *http.Request) {
 
 // renderSourceForm loads the profile options and renders the form for the given
 // mode (create or edit).
-func (s *Server) renderSourceForm(w http.ResponseWriter, ctx context.Context, opts sourceFormOptions) {
+func (s *Server) renderSourceForm(w http.ResponseWriter, r *http.Request, opts sourceFormOptions) {
+	ctx := r.Context()
 	profiles, err := s.deps.Profiles.ListProfiles(ctx)
 	if err != nil {
 		http.Error(w, "could not load profiles", http.StatusInternalServerError)
@@ -325,7 +326,7 @@ func (s *Server) renderSourceForm(w http.ResponseWriter, ctx context.Context, op
 	}
 
 	view := sourceFormView{
-		baseView:    s.newBaseView(opts.Heading, navSources),
+		baseView:    s.newBaseView(r, opts.Heading, navSources),
 		Profiles:    profiles,
 		Error:       opts.Message,
 		Values:      opts.Values,
@@ -389,7 +390,7 @@ func (s *Server) handleSourceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := sourceDetailView{
-		baseView:  s.newBaseView(source.Name, navSources),
+		baseView:  s.newBaseView(r, source.Name, navSources),
 		Source:    source,
 		Stats:     stats[id],
 		Scanning:  scanning,
