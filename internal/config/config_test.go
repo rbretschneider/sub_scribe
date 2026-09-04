@@ -239,6 +239,68 @@ func TestLoadRejectsHalfConfiguredAuth(t *testing.T) {
 	}
 }
 
+func TestLoadOIDCTriple(t *testing.T) {
+	cfg, err := Load(fakeEnv(map[string]string{
+		"SUBSCRIBE_OIDC_ISSUER_URL":    "https://auth.example.com/application/o/sub-scribe/",
+		"SUBSCRIBE_OIDC_CLIENT_ID":     "subscribe-client",
+		"SUBSCRIBE_OIDC_CLIENT_SECRET": "s3cret",
+	}))
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if !cfg.OIDC.Enabled() {
+		t.Fatal("OIDC.Enabled() = false with all three variables set")
+	}
+	if cfg.OIDC.ClientID != "subscribe-client" || cfg.OIDC.ClientSecret != "s3cret" {
+		t.Errorf("OIDC credentials = %q/%q, want subscribe-client/s3cret",
+			cfg.OIDC.ClientID, cfg.OIDC.ClientSecret)
+	}
+	if cfg.OIDC.ButtonLabel != "Sign in with SSO" {
+		t.Errorf("ButtonLabel = %q, want the default", cfg.OIDC.ButtonLabel)
+	}
+}
+
+func TestLoadOIDCButtonLabelOverride(t *testing.T) {
+	cfg, err := Load(fakeEnv(map[string]string{
+		"SUBSCRIBE_OIDC_ISSUER_URL":    "https://auth.example.com/o/app/",
+		"SUBSCRIBE_OIDC_CLIENT_ID":     "id",
+		"SUBSCRIBE_OIDC_CLIENT_SECRET": "secret",
+		"SUBSCRIBE_OIDC_BUTTON_LABEL":  "Sign in with authentik",
+	}))
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.OIDC.ButtonLabel != "Sign in with authentik" {
+		t.Errorf("ButtonLabel = %q, want the override", cfg.OIDC.ButtonLabel)
+	}
+}
+
+func TestLoadOIDCDormantByDefault(t *testing.T) {
+	cfg, err := Load(fakeEnv(nil))
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.OIDC.Enabled() {
+		t.Error("OIDC.Enabled() = true with nothing configured")
+	}
+}
+
+func TestLoadRejectsPartialOIDCConfiguration(t *testing.T) {
+	// One or two of the three set is a misconfiguration that would either
+	// silently leave SSO off or break at the first login; fail at startup.
+	for _, vars := range []map[string]string{
+		{"SUBSCRIBE_OIDC_ISSUER_URL": "https://auth.example.com/"},
+		{"SUBSCRIBE_OIDC_CLIENT_ID": "id"},
+		{"SUBSCRIBE_OIDC_CLIENT_SECRET": "secret"},
+		{"SUBSCRIBE_OIDC_ISSUER_URL": "https://auth.example.com/", "SUBSCRIBE_OIDC_CLIENT_ID": "id"},
+		{"SUBSCRIBE_OIDC_CLIENT_ID": "id", "SUBSCRIBE_OIDC_CLIENT_SECRET": "secret"},
+	} {
+		if _, err := Load(fakeEnv(vars)); err == nil {
+			t.Errorf("Load(%v) accepted a partial OIDC configuration", vars)
+		}
+	}
+}
+
 func TestLoadYtDlpAutoUpdateToggle(t *testing.T) {
 	tests := []struct {
 		raw     string
