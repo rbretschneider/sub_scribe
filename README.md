@@ -153,9 +153,35 @@ video arrives as an episode. The exact address is shown on the source's page,
 and the feed appears after the source's first download. An **audio-only media
 profile** turns a channel into a true listening feed.
 
-If you've enabled the login (`SUBSCRIBE_USERNAME`/`SUBSCRIBE_PASSWORD`), the
-feeds sit behind it too — most podcast apps accept credentials, or a URL in the
-`http://user:pass@host` form.
+If you've enabled a login (basic auth or SSO), the feeds sit behind it too.
+Each source's page shows a **tokenized feed URL** (`/feeds/<id>?t=<token>`)
+that authorizes the feed on its own — podcast apps can't complete a browser
+login, so the address is the key. Treat it like a password. Basic-auth
+credentials (`http://user:pass@host` form) keep working as well.
+
+### Single sign-on (OIDC)
+
+sub_scribe can hand its login to your identity provider (authentik, Keycloak,
+Pocket ID, …). Dormant until all three variables are set:
+
+```yaml
+SUBSCRIBE_OIDC_ISSUER_URL: "https://auth.example.com/application/o/sub-scribe/"
+SUBSCRIBE_OIDC_CLIENT_ID: "sub_scribe"
+SUBSCRIBE_OIDC_CLIENT_SECRET: "…"
+# SUBSCRIBE_OIDC_BUTTON_LABEL: "Sign in with authentik"   # optional
+```
+
+The model is **trust the IdP**: sub_scribe is a single-operator app with no
+user table, so *any* identity your provider authenticates and authorizes for
+the application gets in. Restricting who that is — an authentik group binding
+on the application, for example — is done at the provider, and you should set
+one up before exposing the app. Endpoints come from issuer discovery; register
+the exact redirect URI `https://<your host>/auth/oidc/callback` at the IdP.
+
+Browsers get a login page and a session cookie (7 days, signed with a secret
+the app generates and keeps in its database — nothing extra to configure).
+Basic auth may stay enabled alongside SSO for scripts and feed readers, and
+podcast apps use the tokenized feed URLs above.
 
 ### Upgrading
 
@@ -333,6 +359,8 @@ All configuration is via environment variables (sensible defaults shown):
 | `SUBSCRIBE_YTDLP_PATH` | `yt-dlp` | Path to the yt-dlp binary |
 | `SUBSCRIBE_YTDLP_AUTO_UPDATE` | `true` | Update yt-dlp at every startup, so a restart fixes YouTube breakage; `false` disables |
 | `SUBSCRIBE_USERNAME` / `SUBSCRIBE_PASSWORD` | *(none)* | Set both to require a login (HTTP basic auth) on the whole UI — do this before exposing it beyond your LAN |
+| `SUBSCRIBE_OIDC_ISSUER_URL` / `SUBSCRIBE_OIDC_CLIENT_ID` / `SUBSCRIBE_OIDC_CLIENT_SECRET` | *(none)* | Set all three to enable single sign-on via your OpenID Connect provider (see [Single sign-on](#single-sign-on-oidc)) |
+| `SUBSCRIBE_OIDC_BUTTON_LABEL` | `Sign in with SSO` | The login page's button text |
 | `SUBSCRIBE_APPRISE_BINARY` | `apprise` | Path to Apprise (notifications) |
 | `SUBSCRIBE_APPRISE_URLS` | *(none)* | Comma-separated Apprise URLs |
 | `SUBSCRIBE_POT_PROVIDER_URL` | *(none)* | Base URL of a PO-token provider (skip cookies for most videos) |
@@ -407,6 +435,8 @@ the media root.
   instead of burning retries and drawing more attention
 - Optional login (`SUBSCRIBE_USERNAME`/`SUBSCRIBE_PASSWORD`) for deployments
   that leave the trusted LAN
+- Optional single sign-on through any OpenID Connect provider, with tokenized
+  feed URLs so podcast apps keep working behind the login
 - Retention: auto-delete media older than a configured age
 - Apprise notifications
 - Live UI updates over Server-Sent Events (no page reloads)
