@@ -89,13 +89,13 @@ func (s *Server) handleProfiles(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load profiles", http.StatusInternalServerError)
 		return
 	}
-	view := profilesView{baseView: s.newBaseView("Media profiles", navProfiles), Profiles: profiles}
+	view := profilesView{baseView: s.newBaseView(r, "Media profiles", navProfiles), Profiles: profiles}
 	s.render(w, "profiles", http.StatusOK, view)
 }
 
 // handleProfileNew renders the new-profile form with sensible defaults.
 func (s *Server) handleProfileNew(w http.ResponseWriter, r *http.Request) {
-	s.renderProfileForm(w, profileFormOptions{
+	s.renderProfileForm(w, r, profileFormOptions{
 		Heading:     "New profile",
 		Action:      "/profiles",
 		SubmitLabel: "Create profile",
@@ -112,12 +112,12 @@ func (s *Server) handleProfileCreate(w http.ResponseWriter, r *http.Request) {
 	profile, err := values.toProfile()
 	if err != nil {
 		opts.Message = err.Error()
-		s.renderProfileForm(w, opts)
+		s.renderProfileForm(w, r, opts)
 		return
 	}
 	if _, err := s.deps.Profiles.CreateProfile(r.Context(), profile); err != nil {
 		opts.Message = friendlyProfileError(err)
-		s.renderProfileForm(w, opts)
+		s.renderProfileForm(w, r, opts)
 		return
 	}
 	redirect(w, r, "/profiles")
@@ -134,7 +134,7 @@ func (s *Server) handleProfileEdit(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	s.renderProfileForm(w, profileFormOptions{
+	s.renderProfileForm(w, r, profileFormOptions{
 		Heading:     "Edit profile",
 		Action:      fmt.Sprintf("/profiles/%d", id),
 		SubmitLabel: "Save changes",
@@ -161,14 +161,14 @@ func (s *Server) handleProfileUpdate(w http.ResponseWriter, r *http.Request) {
 	profile, err := values.toProfile()
 	if err != nil {
 		opts.Message = err.Error()
-		s.renderProfileForm(w, opts)
+		s.renderProfileForm(w, r, opts)
 		return
 	}
 	profile.ID = existing.ID
 	profile.CreatedAt = existing.CreatedAt
 	if err := s.deps.Profiles.UpdateProfile(r.Context(), profile); err != nil {
 		opts.Message = friendlyProfileError(err)
-		s.renderProfileForm(w, opts)
+		s.renderProfileForm(w, r, opts)
 		return
 	}
 	redirect(w, r, "/profiles")
@@ -188,9 +188,9 @@ func (s *Server) handleProfileDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // renderProfileForm renders the profile form for the configured mode.
-func (s *Server) renderProfileForm(w http.ResponseWriter, opts profileFormOptions) {
+func (s *Server) renderProfileForm(w http.ResponseWriter, r *http.Request, opts profileFormOptions) {
 	view := profileFormView{
-		baseView:               s.newBaseView(opts.Heading, navProfiles),
+		baseView:               s.newBaseView(r, opts.Heading, navProfiles),
 		Error:                  opts.Message,
 		Values:                 opts.Values,
 		Heading:                opts.Heading,

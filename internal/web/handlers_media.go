@@ -41,7 +41,7 @@ func (s *Server) handleMediaDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	view := mediaDetailView{
-		baseView: s.newBaseView(item.Media.Metadata.Title, navLibrary),
+		baseView: s.newBaseView(r, item.Media.Metadata.Title, navLibrary),
 		Item:     item,
 		WatchURL: watchURLFor(item.Media.ExternalID),
 		CanRetry: canRetryMedia(item.Media.Status),

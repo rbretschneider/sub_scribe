@@ -168,6 +168,12 @@
     }
     fetch(window.location.href, { credentials: "same-origin" })
       .then(function (response) {
+        // A 401 means the login session expired mid-visit; go sign in again
+        // rather than silently polling a page the server no longer serves.
+        if (response.status === 401) {
+          window.location.assign("/auth/login");
+          return null;
+        }
         return response.ok ? response.text() : null;
       })
       .then(swapLiveRegion)
@@ -385,7 +391,22 @@
     stream.onmessage = function (event) {
       logActivity(describeEvent(event.data));
     };
-    // The browser auto-reconnects on error; no manual retry loop needed.
+    // The browser auto-reconnects on transient errors; no manual retry loop
+    // needed. A CLOSED stream is the fatal case — typically the server said
+    // 401 because the login session expired — so probe once and go sign in
+    // again if that is what happened.
+    stream.onerror = function () {
+      if (stream.readyState !== EventSource.CLOSED || typeof fetch !== "function") {
+        return;
+      }
+      fetch(window.location.href, { credentials: "same-origin" })
+        .then(function (response) {
+          if (response.status === 401) {
+            window.location.assign("/auth/login");
+          }
+        })
+        .catch(function () { /* offline; the next navigation sorts it out */ });
+    };
 
     // Close the stream the instant we navigate away. A persistent SSE connection
     // otherwise lingers (and can be frozen in the back/forward cache), so rapid

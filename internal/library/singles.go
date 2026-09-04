@@ -133,6 +133,7 @@ func (s *Service) ensureSinglesSource(ctx context.Context) (domain.Source, error
 		ShortsRule:      domain.InclusionInclude,
 		LivestreamsRule: domain.InclusionInclude,
 		Enabled:         true,
+		FeedToken:       domain.NewFeedToken(),
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}

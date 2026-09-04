@@ -109,8 +109,14 @@ func run() error {
 		return fmt.Errorf("reconcile queue state: %w", err)
 	}
 
+	sessionSecret, err := loadSessionSecret(context.Background(), cfg, db)
+	if err != nil {
+		return err
+	}
+
 	handler, err := buildHTTPHandler(cfg, webDeps{
 		svc: svc, tasks: db.Tasks(), logs: logBuffer, clock: clock, hub: hub,
+		sessionSecret: sessionSecret,
 	})
 	if err != nil {
 		return err
@@ -260,11 +266,26 @@ func buildNotifier(cfg config.Config) library.Notifier {
 // webDeps groups what the UI needs, keeping the handler builder to a short
 // signature as the number of screens grows.
 type webDeps struct {
-	svc   *library.Service
-	tasks *store.TaskRepo
-	logs  *applog.Buffer
-	clock jobs.Clock
-	hub   *events.Hub
+	svc           *library.Service
+	tasks         *store.TaskRepo
+	logs          *applog.Buffer
+	clock         jobs.Clock
+	hub           *events.Hub
+	sessionSecret []byte
+}
+
+// loadSessionSecret fetches (or first creates) the persistent cookie-signing
+// secret when SSO is configured. Without SSO there are no signed cookies, so
+// nothing is generated and the database stays untouched.
+func loadSessionSecret(ctx context.Context, cfg config.Config, db *store.DB) ([]byte, error) {
+	if !cfg.OIDC.Enabled() {
+		return nil, nil
+	}
+	secret, err := db.Settings().SessionSecret(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load session secret: %w", err)
+	}
+	return secret, nil
 }
 
 // buildHTTPHandler mounts the SSE hub and the web UI on one mux. The more
@@ -284,6 +305,13 @@ func buildHTTPHandler(cfg config.Config, deps webDeps) (http.Handler, error) {
 		EventsPath:  eventsPath,
 		Username:    cfg.Username,
 		Password:    cfg.Password,
+		OIDC: web.OIDCOptions{
+			IssuerURL:    cfg.OIDC.IssuerURL,
+			ClientID:     cfg.OIDC.ClientID,
+			ClientSecret: cfg.OIDC.ClientSecret,
+			ButtonLabel:  cfg.OIDC.ButtonLabel,
+		},
+		SessionSecret: deps.sessionSecret,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build web server: %w", err)

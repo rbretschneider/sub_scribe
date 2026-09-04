@@ -59,6 +59,17 @@ services:
       SUBSCRIBE_REQUEST_DELAY_SECONDS: "2"         # between HTTP requests
       SUBSCRIBE_CALL_GAP_SECONDS: "5"              # spacing across all workers
       # SUBSCRIBE_RATE_LIMIT: "4M"                 # bandwidth cap, off by default
+      # Single sign-on through your OpenID Connect provider (authentik,
+      # Keycloak, ...). All three must be set together; leaving them unset (the
+      # default) keeps SSO entirely off. Values are bridged from .env so the
+      # secret never lives in this file. Register the redirect URI
+      # https://<your host>/auth/oidc/callback at the provider, and restrict
+      # who may use the application there (e.g. an authentik group binding) —
+      # any identity the provider lets through gets in.
+      SUBSCRIBE_OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      SUBSCRIBE_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      SUBSCRIBE_OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      # SUBSCRIBE_OIDC_BUTTON_LABEL: "Sign in with authentik"  # login button text
     depends_on:
       - pot-provider
     restart: unless-stopped

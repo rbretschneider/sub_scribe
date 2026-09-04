@@ -79,3 +79,8 @@ func (db *DB) Media() *MediaRepo {
 func (db *DB) Profiles() *ProfileRepo {
 	return &ProfileRepo{sql: db.sql}
 }
+
+// Settings returns the repository for app-generated runtime state.
+func (db *DB) Settings() *SettingsRepo {
+	return &SettingsRepo{sql: db.sql}
+}

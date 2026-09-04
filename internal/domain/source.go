@@ -1,6 +1,11 @@
 package domain
 
-import "time"
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"time"
+)
 
 // Source is a remote collection (channel or playlist) that sub_scribe tracks and
 // keeps downloaded. It carries the rules that decide which of the collection's
@@ -38,8 +43,29 @@ type Source struct {
 	// RetentionAfter, when non-zero, deletes downloaded media older than this age.
 	RetentionAfter time.Duration
 
+	// FeedToken is the capability secret in the source's podcast feed URL
+	// (/feeds/{id}?t=token). Podcast apps cannot log in through a browser SSO
+	// flow, so the token in the URL is what authorizes them when the UI is
+	// otherwise locked. Assigned at creation and never rotated by edits.
+	FeedToken string
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// feedTokenBytes sizes the feed token: 16 random bytes (128 bits) rendered as
+// 32 hex characters — unguessable, yet short enough to keep feed URLs tidy.
+const feedTokenBytes = 16
+
+// NewFeedToken returns a fresh feed capability token from crypto/rand.
+func NewFeedToken() string {
+	buf := make([]byte, feedTokenBytes)
+	if _, err := rand.Read(buf); err != nil {
+		// crypto/rand failing means the OS entropy source is broken; there is no
+		// safe fallback for a secret, so this is one of the rare justified panics.
+		panic(fmt.Sprintf("domain: generating feed token: %v", err))
+	}
+	return hex.EncodeToString(buf)
 }
 
 // EffectiveCutoff resolves the source's download cutoff as of now: the rolling

@@ -22,7 +22,7 @@ const urlFormField = "url"
 // handleDownloadNew renders the form for downloading a single pasted video.
 func (s *Server) handleDownloadNew(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "download_form", http.StatusOK, downloadFormView{
-		baseView: s.newBaseView("Save a video", navLibrary),
+		baseView: s.newBaseView(r, "Save a video", navLibrary),
 	})
 }
 
@@ -35,7 +35,7 @@ func (s *Server) handleDownloadCreate(w http.ResponseWriter, r *http.Request) {
 	id, err := s.deps.Sources.DownloadVideo(r.Context(), rawURL)
 	if errors.Is(err, library.ErrNotAVideoURL) {
 		s.render(w, "download_form", http.StatusOK, downloadFormView{
-			baseView: s.newBaseView("Save a video", navLibrary),
+			baseView: s.newBaseView(r, "Save a video", navLibrary),
 			Error:    "That doesn't look like a link to a single video. Paste a watch, youtu.be, or Shorts link — channels and playlists belong in Sources.",
 			URL:      rawURL,
 		})

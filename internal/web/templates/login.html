@@ -1,0 +1,18 @@
+{{define "title"}}{{.Title}}{{end}}
+
+{{define "content"}}
+<h1 class="auth-heading">Sign in</h1>
+
+{{if .Error}}
+<div class="alert alert-error" role="alert">
+  <p>{{.Error}}</p>
+</div>
+{{end}}
+
+<a class="btn btn-primary auth-sso" href="/auth/oidc/start">{{.ButtonLabel}}</a>
+
+{{if .BasicAvailable}}
+<p class="auth-note">Scripts and feed readers can keep using HTTP basic auth
+  with the configured username and password.</p>
+{{end}}
+{{end}}

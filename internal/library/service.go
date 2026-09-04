@@ -99,6 +99,7 @@ func (s *Service) AddSource(ctx context.Context, input AddSourceInput) (domain.S
 	now := s.deps.Clock.Now()
 	source := sourceFromInput(normalized, now)
 	source.Enabled = true
+	source.FeedToken = domain.NewFeedToken()
 
 	id, err := s.deps.Sources.Create(ctx, source)
 	if err != nil {
@@ -141,6 +142,9 @@ func (s *Service) UpdateSource(ctx context.Context, id int64, input AddSourceInp
 	source.ID = existing.ID
 	source.Enabled = existing.Enabled
 	source.LastIndexedAt = existing.LastIndexedAt
+	// The feed token survives edits: rotating it would silently break every
+	// podcast app already subscribed to the tokenized feed URL.
+	source.FeedToken = existing.FeedToken
 	source.CreatedAt = existing.CreatedAt
 
 	if err := s.deps.Sources.Update(ctx, source); err != nil {

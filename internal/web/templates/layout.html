@@ -57,6 +57,12 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 4v11M6 10l6 6 6-6M4 20h16"/></svg>Save a video</a>
           <a class="btn btn-primary" href="/sources/new">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>Add source</a>
+          {{if .HasSession}}
+          <form method="post" action="/auth/logout">
+            <button class="btn btn-secondary" type="submit" title="Sign out of this browser">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l-5-5 5-5M5 12h11"/></svg>Sign out</button>
+          </form>
+          {{end}}
         </div>
       </header>
 
