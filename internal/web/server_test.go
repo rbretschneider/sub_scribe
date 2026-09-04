@@ -254,6 +254,35 @@ func TestDashboardShowsOverviewAndTokenBadge(t *testing.T) {
 	}
 }
 
+func TestDashboardRowsShowThumbnailsOnlyForItemsWithAFile(t *testing.T) {
+	lib := &fakeLibrary{overview: library.Overview{
+		Recent: []library.MediaListItem{{
+			Media: domain.Media{ID: 7, Status: domain.MediaDownloaded, FilePath: "/media/x.mkv",
+				Metadata: domain.MediaMetadata{Title: "Archived"}},
+			SourceName: "Chan",
+		}},
+		Downloading: []library.MediaListItem{{
+			// Mid-download there is no file yet, so no thumbnail request should be
+			// rendered — the gradient placeholder carries the row.
+			Media: domain.Media{ID: 8, Status: domain.MediaDownloading,
+				Metadata: domain.MediaMetadata{Title: "In flight"}},
+			SourceName: "Chan",
+		}},
+	}}
+	server := newTestServerFull(t, &fakeSources{}, &fakeProfiles{}, lib, filepath.Join(t.TempDir(), "c.txt"))
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `src="/library/7/thumb"`) {
+		t.Error("a downloaded row should carry its thumbnail image")
+	}
+	if strings.Contains(body, `src="/library/8/thumb"`) {
+		t.Error("an in-flight row has no file and must not request a thumbnail")
+	}
+}
+
 func TestDashboardRecentArchivedAreLinks(t *testing.T) {
 	lib := &fakeLibrary{overview: library.Overview{
 		SourceCount: 1,

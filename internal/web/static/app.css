@@ -214,6 +214,10 @@ a.dl:hover { background: var(--surface-2); }
 .card-thumb::after { content: ""; position: absolute; inset: 0; background: var(--tp); }
 .card-thumb .len { position: absolute; right: 7px; bottom: 7px; z-index: 2; font-family: var(--mono); font-size: 11px; background: rgba(0,0,0,0.72); color: #fff; padding: 2px 6px; border-radius: 4px; }
 /* Sits above the ::after gradient, which stays as the fallback underneath. */
+/* card-img is the real thumbnail layered over a gradient placeholder. Shared by
+   the library's big cards and the dashboard's small .thumb rows: the image sits
+   at z-index 1 above the ::after gradient, and onerror removes it so a missing
+   file falls back to the gradient rather than a broken image. */
 .card-img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; }
 .card-body { padding: 12px 13px 14px; }
 .card-title { font-weight: 600; font-size: 14px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 38px; }

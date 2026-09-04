@@ -41,7 +41,9 @@
   <!-- Keyed by media id, not source id: two videos from one channel would
        otherwise share a progress bar. -->
   <div class="dl" data-media="{{.Media.ID}}">
-    <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
+    <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">
+      {{if .Media.FilePath}}<img class="card-img" src="/library/{{.Media.ID}}/thumb" alt="" loading="lazy" onerror="this.remove()">{{end}}
+      {{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
     <div>
       <div class="dl-title"><a href="/library/{{.Media.ID}}">{{.Media.Metadata.Title}}</a></div>
       <div class="dl-meta">{{.SourceName}}</div>
@@ -60,7 +62,9 @@
     <div class="panel panel-scroll">
       {{range .Recent}}
       <a class="dl" href="/library/{{.Media.ID}}">
-        <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
+        <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">
+          {{if .Media.FilePath}}<img class="card-img" src="/library/{{.Media.ID}}/thumb" alt="" loading="lazy" onerror="this.remove()">{{end}}
+          {{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
         <div>
           <div class="dl-title">{{.Media.Metadata.Title}}</div>
           <div class="dl-meta">{{.SourceName}} · {{bytes .Media.FileSize}}</div>
@@ -80,7 +84,9 @@
     <div class="panel panel-scroll">
       {{range .RetentionQueue}}
       <a class="dl" href="/library/{{.Media.ID}}">
-        <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">{{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
+        <div class="thumb" style="--tp:{{thumb .Media.ExternalID}}">
+          {{if .Media.FilePath}}<img class="card-img" src="/library/{{.Media.ID}}/thumb" alt="" loading="lazy" onerror="this.remove()">{{end}}
+          {{with clock .Media.Metadata.Duration}}<span class="len">{{.}}</span>{{end}}</div>
         <div>
           <div class="dl-title">{{.Media.Metadata.Title}}</div>
           <div class="dl-meta">{{.SourceName}} · {{retentionDelta .Expiration}}</div>
