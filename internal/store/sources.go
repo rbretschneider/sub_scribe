@@ -24,7 +24,7 @@ type SourceRepo struct {
 const sourceColumns = `id, name, url, collection_type, media_profile_id, enabled,
 	index_frequency_seconds, last_indexed_at, cookie_behavior, download_cutoff,
 	title_filter_pattern, shorts_rule, livestreams_rule, retention_after_seconds,
-	cutoff_window_seconds, created_at, updated_at`
+	cutoff_window_seconds, feed_token, created_at, updated_at`
 
 // toDurationSeconds converts a duration to the whole-seconds integer stored in
 // the *_seconds columns.
@@ -43,15 +43,15 @@ func (r *SourceRepo) Create(ctx context.Context, source domain.Source) (int64, e
 		`INSERT INTO sources(name, url, collection_type, media_profile_id, enabled,
 			index_frequency_seconds, last_indexed_at, cookie_behavior, download_cutoff,
 			title_filter_pattern, shorts_rule, livestreams_rule, retention_after_seconds,
-			cutoff_window_seconds, created_at, updated_at)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			cutoff_window_seconds, feed_token, created_at, updated_at)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		source.Name, source.URL, source.CollectionType, source.MediaProfileID,
 		boolToInt(source.Enabled), toDurationSeconds(source.IndexFrequency),
 		toNullUnix(source.LastIndexedAt), source.CookieBehavior,
 		toNullUnix(source.DownloadCutoff), source.TitleFilterPattern,
 		source.ShortsRule, source.LivestreamsRule,
 		toDurationSeconds(source.RetentionAfter), toDurationSeconds(source.CutoffWindow),
-		source.CreatedAt.Unix(), source.UpdatedAt.Unix(),
+		source.FeedToken, source.CreatedAt.Unix(), source.UpdatedAt.Unix(),
 	)
 	if err != nil {
 		return 0, fmt.Errorf("store: create source: %w", err)
@@ -97,7 +97,9 @@ func (r *SourceRepo) List(ctx context.Context) ([]domain.Source, error) {
 	return sources, nil
 }
 
-// Update writes every mutable field of an existing source.
+// Update writes every mutable field of an existing source. The feed token is
+// deliberately not among them: it is assigned at creation and rotating it on
+// edit would break every podcast app subscribed to the tokenized feed URL.
 func (r *SourceRepo) Update(ctx context.Context, source domain.Source) error {
 	if _, err := r.sql.ExecContext(ctx,
 		`UPDATE sources SET name = ?, url = ?, collection_type = ?, media_profile_id = ?,
@@ -186,7 +188,7 @@ func scanSource(row rowScanner) (domain.Source, error) {
 		&source.MediaProfileID, &enabled, &indexFreq, &lastIndexed,
 		&source.CookieBehavior, &downloadCutoff, &source.TitleFilterPattern,
 		&source.ShortsRule, &source.LivestreamsRule, &retention,
-		&cutoffWindow, &createdAt, &updatedAt,
+		&cutoffWindow, &source.FeedToken, &createdAt, &updatedAt,
 	); err != nil {
 		return domain.Source{}, err
 	}

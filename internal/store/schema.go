@@ -1,13 +1,22 @@
 package store
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
+
+	"sub_scribe/internal/domain"
+)
 
 // migration is a single, ordered, forward-only schema change. Migrations are
 // applied in slice order inside a transaction and recorded so each runs once.
+// A migration that needs values SQL cannot produce (random secrets, per-row
+// generated data) supplies a run function, executed after stmt in the same
+// transaction.
 type migration struct {
 	version int
 	name    string
 	stmt    string
+	run     func(tx *sql.Tx) error
 }
 
 // migrations is the ordered schema history. Append new migrations; never edit or
@@ -210,6 +219,59 @@ var migrations = []migration{
 			WHERE sponsorblock_mode != 'off'
 			  AND sponsorblock_categories IN ('[]', '', 'null')`,
 	},
+	{
+		version: 18,
+		name:    "add_source_feed_tokens",
+		// The feed token is the per-source secret that lets podcast apps — which
+		// cannot complete a browser login — fetch /feeds/{id}?t=<token> when the
+		// UI is otherwise locked. Existing sources are backfilled so every feed
+		// URL is tokenized the moment auth turns on, not only newly added ones.
+		stmt: `ALTER TABLE sources
+			ADD COLUMN feed_token TEXT NOT NULL DEFAULT ''`,
+		run: backfillFeedTokens,
+	},
+	{
+		version: 19,
+		name:    "create_settings",
+		// A key-value table for app-generated runtime state that must survive
+		// restarts but should never burden deployment as an env var — the first
+		// occupant is the session-cookie signing secret.
+		stmt: `CREATE TABLE settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		)`,
+	},
+}
+
+// backfillFeedTokens assigns a fresh random token to every source created
+// before feed tokens existed. SQL cannot draw from crypto/rand, so the rows
+// are updated one by one inside the migration's transaction.
+func backfillFeedTokens(tx *sql.Tx) error {
+	rows, err := tx.Query(`SELECT id FROM sources WHERE feed_token = ''`)
+	if err != nil {
+		return fmt.Errorf("list sources without tokens: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("scan source id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("list sources without tokens: %w", err)
+	}
+
+	for _, id := range ids {
+		if _, err := tx.Exec(`UPDATE sources SET feed_token = ? WHERE id = ?`,
+			domain.NewFeedToken(), id); err != nil {
+			return fmt.Errorf("backfill feed token for source %d: %w", id, err)
+		}
+	}
+	return nil
 }
 
 // migrate applies every migration not yet recorded, each in its own transaction,
@@ -267,6 +329,11 @@ func (db *DB) applyMigration(m migration) error {
 
 	if _, err := tx.Exec(m.stmt); err != nil {
 		return fmt.Errorf("exec statement: %w", err)
+	}
+	if m.run != nil {
+		if err := m.run(tx); err != nil {
+			return fmt.Errorf("run migration code: %w", err)
+		}
 	}
 	if _, err := tx.Exec(
 		`INSERT INTO schema_migrations(version, name, applied_at) VALUES(?, ?, unixepoch())`,
