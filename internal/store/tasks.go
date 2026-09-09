@@ -133,18 +133,36 @@ func (r *TaskRepo) Fail(ctx context.Context, task jobs.Task, cause string, now t
 	return nil
 }
 
-// Defer returns a claimed task to the pending queue with a new eligibility time
-// and no attempt recorded. The reason is stored where an error would go so the
-// job's detail view can say why it is waiting; a task that simply looked pending
-// with a run_after an hour out would read as stuck.
+// Defer returns a claimed task to the pending queue with a new eligibility time,
+// giving back the attempt its claim charged — a deferral is a decision, not a
+// failure, and must not spend the retry budget a later genuine error will need.
+// The reason is stored where an error would go so the job's detail view can say
+// why it is waiting; a task that simply looked pending with a run_after an hour
+// out would read as stuck.
+//
+// The eligibility time is rounded UP to the next whole second. run_after lives
+// in unix seconds, and truncating a deadline 300ms out would store a time that
+// has already passed — making the task instantly claimable again and spinning
+// claim/defer thousands of times a second until the fraction elapsed, charging
+// a phantom attempt per spin. Rounding up waits out the fraction instead.
 func (r *TaskRepo) Defer(ctx context.Context, id int64, runAfter, now time.Time, reason string) error {
 	if _, err := r.sql.ExecContext(ctx,
-		`UPDATE tasks SET status = ?, last_error = ?, run_after = ?, updated_at = ? WHERE id = ?`,
-		jobs.StatusPending, reason, runAfter.Unix(), now.Unix(), id,
+		`UPDATE tasks SET status = ?, attempts = MAX(attempts - 1, 0), last_error = ?, run_after = ?, updated_at = ? WHERE id = ?`,
+		jobs.StatusPending, reason, unixCeil(runAfter), now.Unix(), id,
 	); err != nil {
 		return fmt.Errorf("store: defer task %d: %w", id, err)
 	}
 	return nil
+}
+
+// unixCeil converts a time to unix seconds, rounding up so a deadline with a
+// fractional second is never stored as already elapsed.
+func unixCeil(t time.Time) int64 {
+	sec := t.Unix()
+	if t.Nanosecond() > 0 {
+		sec++
+	}
+	return sec
 }
 
 // requeue reschedules a retryable task for a later attempt with backoff.
