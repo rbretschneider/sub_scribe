@@ -94,10 +94,13 @@ const (
 	// potProviderArgPrefix is the yt-dlp extractor-args key for the bgutil HTTP
 	// PO-token provider; the provider's base URL is appended to it.
 	potProviderArgPrefix = "youtubepot-bgutilhttp:base_url="
-	// playerClientArgPrefix pins the YouTube player client. yt-dlp's default
-	// client selection returns stream URLs that 403 on the data fetch for some
-	// videos (first seen across Red Bull Motorsports uploads); tv_simply's URLs
-	// download reliably. Update defaultPlayerClient if YouTube deprecates it.
+	// playerClientArgPrefix pins the YouTube player client, for every operation
+	// that resolves videos. yt-dlp's default client selection returns stream URLs
+	// that 403 on the data fetch for some videos (first seen across Red Bull
+	// Motorsports uploads) and is also where "confirm you're not a bot" checks
+	// fire — a dated scan resolving each video through the default client got
+	// bot-checked per video even with valid cookies, while tv_simply sails
+	// through. Update defaultPlayerClient if YouTube deprecates it.
 	playerClientArgPrefix = "youtube:player_client="
 	defaultPlayerClient   = "tv_simply"
 )
@@ -189,6 +192,7 @@ func buildIndexArgs(url string, opts IndexOptions, potProviderURL string, thrott
 	args = appendCookies(args, opts.CookiesPath)
 	args = appendPOTProvider(args, potProviderURL)
 	args = throttle.appendRequestFlags(args)
+	args = appendPlayerClient(args)
 	return append(args, url)
 }
 
@@ -200,6 +204,7 @@ func buildMetadataArgs(url, cookiesPath, potProviderURL string, throttle Throttl
 	args = appendCookies(args, cookiesPath)
 	args = appendPOTProvider(args, potProviderURL)
 	args = throttle.appendRequestFlags(args)
+	args = appendPlayerClient(args)
 	return append(args, url)
 }
 

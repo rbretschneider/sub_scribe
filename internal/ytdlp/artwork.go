@@ -44,6 +44,7 @@ func buildArtworkArgs(url, cookiesPath, potProviderURL string, throttle Throttle
 	args = appendCookies(args, cookiesPath)
 	args = appendPOTProvider(args, potProviderURL)
 	args = throttle.appendRequestFlags(args)
+	args = appendPlayerClient(args)
 	return append(args, url)
 }
 

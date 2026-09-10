@@ -61,7 +61,11 @@ func (r *ExecRunner) Index(ctx context.Context, url string, opts IndexOptions) (
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil && !isEarlyStop(err) {
-		return nil, fmt.Errorf("yt-dlp index %q: %w: %s", url, err, stderr.String())
+		// Classified like every other runner path. This was the one that wasn't,
+		// which meant a bot-check during a scan surfaced as a plain failure — the
+		// service's throttle backoff never saw ErrThrottled, so the scan burned
+		// its retries hammering a provider that had just asked us to stop.
+		return nil, classifyError(fmt.Errorf("yt-dlp index %q: %w: %s", url, err, stderr.String()), stderr.String())
 	}
 	return scanIndexEntries(&stdout), nil
 }

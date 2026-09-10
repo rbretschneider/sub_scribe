@@ -99,20 +99,23 @@ func TestBuildIndexArgs(t *testing.T) {
 		{
 			name: "without cookies",
 			url:  "https://example.com/playlist",
-			want: []string{"--dump-json", "--ignore-errors", "--flat-playlist", "https://example.com/playlist"},
+			want: []string{"--dump-json", "--ignore-errors", "--flat-playlist",
+				"--extractor-args", "youtube:player_client=tv_simply", "https://example.com/playlist"},
 		},
 		{
 			name:        "with cookies",
 			url:         "https://example.com/playlist",
 			cookiesPath: "/tmp/cookies.txt",
-			want:        []string{"--dump-json", "--ignore-errors", "--flat-playlist", "--cookies", "/tmp/cookies.txt", "https://example.com/playlist"},
+			want: []string{"--dump-json", "--ignore-errors", "--flat-playlist", "--cookies", "/tmp/cookies.txt",
+				"--extractor-args", "youtube:player_client=tv_simply", "https://example.com/playlist"},
 		},
 		{
 			name:           "with PO-token provider",
 			url:            "https://example.com/playlist",
 			potProviderURL: "http://pot:4416",
 			want: []string{"--dump-json", "--ignore-errors", "--flat-playlist",
-				"--extractor-args", "youtubepot-bgutilhttp:base_url=http://pot:4416", "https://example.com/playlist"},
+				"--extractor-args", "youtubepot-bgutilhttp:base_url=http://pot:4416",
+				"--extractor-args", "youtube:player_client=tv_simply", "https://example.com/playlist"},
 		},
 	}
 	for _, tt := range tests {

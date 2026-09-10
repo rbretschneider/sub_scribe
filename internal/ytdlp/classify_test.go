@@ -210,6 +210,27 @@ func TestBuildMetadataArgsRequestsOneItemWithoutDownloading(t *testing.T) {
 	}
 }
 
+// TestEveryVideoResolvingPathPinsThePlayerClient pins tv_simply on all four
+// operations, not just downloads. The default client is where YouTube's
+// bot-checks fire: a dated scan resolving each video through it was bot-checked
+// per video even with valid cookies, while tv_simply passes — so an operation
+// left on the default client is an operation that breaks first.
+func TestEveryVideoResolvingPathPinsThePlayerClient(t *testing.T) {
+	pin := playerClientArgPrefix + defaultPlayerClient
+	builds := map[string][]string{
+		"index (flat)":  buildIndexArgs("https://example.com/@chan", IndexOptions{}, "", Throttle{}),
+		"index (dated)": buildIndexArgs("https://example.com/@chan", IndexOptions{DateAfter: "20260101"}, "", Throttle{}),
+		"metadata":      buildMetadataArgs("https://example.com/v", "", "", Throttle{}),
+		"artwork":       buildArtworkArgs("https://example.com/@chan", "", "", Throttle{}),
+		"download":      buildDownloadArgs("https://example.com/v", DownloadOptions{OutputPath: "v"}, "", Throttle{}),
+	}
+	for name, args := range builds {
+		if !containsPair(args, flagExtractorArgs, pin) {
+			t.Errorf("%s args missing the player-client pin: %v", name, args)
+		}
+	}
+}
+
 // contains reports whether args includes want.
 func contains(args []string, want string) bool {
 	for _, arg := range args {

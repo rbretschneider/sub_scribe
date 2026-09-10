@@ -88,7 +88,8 @@ func TestParseArtworkRejectsMalformedJSON(t *testing.T) {
 func TestBuildArtworkArgsDoesNotWalkTheCollection(t *testing.T) {
 	got := buildArtworkArgs("https://example.com/@chan", "", "", Throttle{})
 
-	want := []string{"--dump-single-json", "--flat-playlist", "--playlist-items", "0", "https://example.com/@chan"}
+	want := []string{"--dump-single-json", "--flat-playlist", "--playlist-items", "0",
+		"--extractor-args", "youtube:player_client=tv_simply", "https://example.com/@chan"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("args = %v, want %v", got, want)
 	}
@@ -99,7 +100,8 @@ func TestBuildArtworkArgsPassesCookies(t *testing.T) {
 
 	want := []string{
 		"--dump-single-json", "--flat-playlist", "--playlist-items", "0",
-		"--cookies", "/tmp/cookies.txt", "https://example.com/@chan",
+		"--cookies", "/tmp/cookies.txt",
+		"--extractor-args", "youtube:player_client=tv_simply", "https://example.com/@chan",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("args = %v, want %v", got, want)
