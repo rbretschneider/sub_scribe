@@ -183,6 +183,32 @@ the app generates and keeps in its database — nothing extra to configure).
 Basic auth may stay enabled alongside SSO for scripts and feed readers, and
 podcast apps use the tokenized feed URLs above.
 
+### Filing real movies and shows into other Plex libraries
+
+Sometimes what's on YouTube is a real, IMDb-documented film or series that
+belongs in your Movies or TV library, not the YouTube archive. A **media
+profile** can have its own **Download folder**, which routes everything
+downloaded under that profile into a separately mounted library:
+
+1. Mount the target library in `docker-compose.yml`
+   (e.g. `/mnt/your/Movies:/movies`) and `docker compose up -d`.
+2. Create a profile for it — for movies:
+   - **Download folder**: `/movies`
+   - **Output path template**: `{{ title }} ({{ upload_year }})/{{ title }} ({{ upload_year }})`
+   - **Sidecar metadata**: *movie*
+3. Use it:
+   - **A single film**: **Save a video**, paste the link, and pick the movies
+     profile under *Save as*. It downloads straight into `/movies`, named and
+     tagged as a movie.
+   - **A whole series that exists as a playlist**: **Add source** → playlist,
+     and choose a "TV" profile whose download folder is your TV library (keep
+     *episode* metadata and the season/episode template for that one).
+
+Everything else about the app applies unchanged — pacing, retries, sidecars,
+the library screens. The upload year is YouTube's, which may differ from a
+film's release year; Plex's movie agent matches by title, and you can always
+Fix Match.
+
 ### Upgrading
 
 ```bash

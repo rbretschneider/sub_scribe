@@ -39,6 +39,17 @@
   </div>
 
   <div class="field">
+    <label for="download_dir">Download folder <span class="optional">(optional)</span></label>
+    <input id="download_dir" name="download_dir" type="text" autocomplete="off"
+           value="{{.Values.DownloadDir}}" placeholder="Empty — use the main media folder">
+    <p class="field-hint">A container path this profile downloads into <b>instead of</b> the main
+      media folder — the way to file real movies or shows into a separate Plex library.
+      Mount the library in your compose file first (for example
+      <code>/mnt/your/Movies:/movies</code>), then put <code>/movies</code> here.
+      Leave empty for the normal YouTube archive.</p>
+  </div>
+
+  <div class="field">
     <label for="kind">Downloads</label>
     <select id="kind" name="kind">
       <option value="video" {{selected .Values.Kind "video"}}>Video</option>

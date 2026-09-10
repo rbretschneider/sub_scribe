@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"sub_scribe/internal/domain"
 	"sub_scribe/internal/library"
 )
 
@@ -41,6 +42,42 @@ func TestDownloadCreateQueuesAndLandsOnTheVideo(t *testing.T) {
 	}
 	if len(sources.downloadedURLs) != 1 || sources.downloadedURLs[0] != "https://youtu.be/gCZOjDar1tU" {
 		t.Errorf("downloadedURLs = %v", sources.downloadedURLs)
+	}
+}
+
+func TestDownloadCreateRoutesTheChosenProfile(t *testing.T) {
+	sources := &fakeSources{downloadID: 42}
+	server := newTestServer(t, sources, &fakeProfiles{}, "")
+
+	form := url.Values{"url": {"https://youtu.be/gCZOjDar1tU"}, "profile_id": {"3"}}
+	rec := submitForm(t, server, "/downloads", form)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if sources.downloadProfileID != 3 {
+		t.Errorf("profile id = %d, want the chosen 3", sources.downloadProfileID)
+	}
+}
+
+func TestDownloadFormOffersAProfilePickerWhenThereAreChoices(t *testing.T) {
+	profiles := &fakeProfiles{profiles: []domain.MediaProfile{
+		{ID: 1, Name: "Default (1080p, Plex layout)"},
+		{ID: 2, Name: "Movies (Plex)", DownloadDir: "/movies"},
+	}}
+	server := newTestServer(t, &fakeSources{}, profiles, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/downloads/new", nil))
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="profile_id"`) {
+		t.Error("with several profiles the form should offer the Save as picker")
+	}
+	// The picker shows where a routed profile files things, so the choice is
+	// informed rather than a bare name.
+	if !strings.Contains(body, "/movies") {
+		t.Error("a profile with its own folder should show that destination")
 	}
 }
 

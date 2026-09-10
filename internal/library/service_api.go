@@ -29,10 +29,11 @@ type SourceService interface {
 	// RequestRename enqueues a pass that moves the source's existing files to the
 	// paths its naming template currently describes.
 	RequestRename(ctx context.Context, id int64) error
-	// DownloadVideo queues one pasted video for immediate download, returning
-	// its media id. It rejects anything that is not a single-video URL with
+	// DownloadVideo queues one pasted video for immediate download under the
+	// chosen media profile (zero = the default profile), returning its media
+	// id. It rejects anything that is not a single-video URL with
 	// ErrNotAVideoURL.
-	DownloadVideo(ctx context.Context, rawURL string) (int64, error)
+	DownloadVideo(ctx context.Context, rawURL string, profileID int64) (int64, error)
 }
 
 // DeleteSourceOptions controls how much of a source is removed. The zero value

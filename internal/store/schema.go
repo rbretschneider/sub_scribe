@@ -241,6 +241,16 @@ var migrations = []migration{
 			value TEXT NOT NULL
 		)`,
 	},
+	{
+		version: 20,
+		name:    "add_profile_download_dir",
+		// A profile-level download root, so a "Movies" or "TV" profile can file
+		// its downloads into a separate mounted library instead of the main
+		// media directory. Empty keeps the main directory, so existing profiles
+		// are untouched.
+		stmt: `ALTER TABLE media_profiles
+			ADD COLUMN download_dir TEXT NOT NULL DEFAULT ''`,
+	},
 }
 
 // backfillFeedTokens assigns a fresh random token to every source created

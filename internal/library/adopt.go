@@ -151,12 +151,18 @@ func (s *Service) deleteSourceFiles(ctx context.Context, sourceID int64) (int, e
 }
 
 // pruneEmptyDirs removes directories left empty by a deletion, walking up toward
-// the media root so an emptied "Channel/Season 2026" takes "Channel" with it. The
-// media root itself is never removed.
+// whichever download root contains them so an emptied "Channel/Season 2026"
+// takes "Channel" with it. The roots themselves are never removed, and a
+// directory under none of them — which sub_scribe cannot have created — is
+// left entirely alone.
 func (s *Service) pruneEmptyDirs(ctx context.Context, dirs map[string]bool) {
-	root := filepath.Clean(s.deps.MediaDir)
+	roots := s.pruneRoots(ctx)
 	for dir := range dirs {
-		for current := filepath.Clean(dir); strings.HasPrefix(current, root) && current != root; {
+		root, ok := rootContaining(roots, dir)
+		if !ok {
+			continue
+		}
+		for current := filepath.Clean(dir); current != root; {
 			if err := os.Remove(current); err != nil {
 				break // not empty, or not ours to remove
 			}
@@ -164,6 +170,34 @@ func (s *Service) pruneEmptyDirs(ctx context.Context, dirs map[string]bool) {
 			current = filepath.Dir(current)
 		}
 	}
+}
+
+// pruneRoots lists every directory downloads can land under: the main media
+// directory plus each profile's own download folder.
+func (s *Service) pruneRoots(ctx context.Context) []string {
+	roots := []string{filepath.Clean(s.deps.MediaDir)}
+	profiles, err := s.deps.Profiles.List(ctx)
+	if err != nil {
+		return roots // profile roots unknown: prune only under the main directory
+	}
+	for _, profile := range profiles {
+		if profile.DownloadDir != "" {
+			roots = append(roots, filepath.Clean(profile.DownloadDir))
+		}
+	}
+	return roots
+}
+
+// rootContaining reports which root dir sits under, if any. The check requires
+// a separator after the root so "/media2" can never pass as inside "/media".
+func rootContaining(roots []string, dir string) (string, bool) {
+	cleaned := filepath.Clean(dir)
+	for _, root := range roots {
+		if cleaned != root && strings.HasPrefix(cleaned, root+string(filepath.Separator)) {
+			return root, true
+		}
+	}
+	return "", false
 }
 
 // directoryCache remembers each directory's listing so a pass over the whole
@@ -250,7 +284,7 @@ func (r *pathResolver) basePathFor(ctx context.Context, media domain.Media) (str
 	if err != nil {
 		return "", false
 	}
-	return filepath.Join(r.service.deps.MediaDir, filepath.FromSlash(rendered)), true
+	return filepath.Join(r.service.mediaRootFor(profile), filepath.FromSlash(rendered)), true
 }
 
 // contextFor returns the source and profile for a source id, loading and caching

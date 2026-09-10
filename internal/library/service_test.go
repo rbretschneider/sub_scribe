@@ -625,6 +625,9 @@ func (r *fakeProfileRepo) List(_ context.Context) ([]domain.MediaProfile, error)
 	for _, p := range r.items {
 		out = append(out, p)
 	}
+	// Ordered by id like the real store, whose "first profile is the default"
+	// contract callers rely on; a map-ordered fake would make that random.
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
 }
 

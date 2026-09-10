@@ -48,9 +48,10 @@ type fakeSources struct {
 	enabledCalls []enabledCall
 	enabledErr   error
 
-	downloadedURLs []string
-	downloadID     int64
-	downloadErr    error
+	downloadedURLs    []string
+	downloadProfileID int64
+	downloadID        int64
+	downloadErr       error
 
 	// deletedWithFiles records, per delete call, whether removing the media files
 	// was requested too — the thing that must never default to true.
@@ -100,8 +101,9 @@ func (f *fakeSources) RequestRename(_ context.Context, id int64) error {
 	return nil
 }
 
-func (f *fakeSources) DownloadVideo(_ context.Context, rawURL string) (int64, error) {
+func (f *fakeSources) DownloadVideo(_ context.Context, rawURL string, profileID int64) (int64, error) {
 	f.downloadedURLs = append(f.downloadedURLs, rawURL)
+	f.downloadProfileID = profileID
 	if f.downloadErr != nil {
 		return 0, f.downloadErr
 	}

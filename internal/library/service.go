@@ -880,7 +880,7 @@ func (s *Service) downloadOptions(profile domain.MediaProfile, source domain.Sou
 	return ytdlp.DownloadOptions{
 		Format:           profile.QualityFormat,
 		OutputPath:       relativeOut,
-		HomeDir:          s.deps.MediaDir,
+		HomeDir:          s.mediaRootFor(profile),
 		TempDir:          s.deps.TempDir,
 		AudioOnly:        profile.Kind == domain.MediaAudio,
 		EmbedMetadata:    profile.EmbedMetadata,
@@ -892,6 +892,18 @@ func (s *Service) downloadOptions(profile domain.MediaProfile, source domain.Sou
 		ExtraArgs:        profile.ExtraYtdlpArgs,
 		CookiesPath:      s.cookieArgFor(source),
 	}
+}
+
+// mediaRootFor returns the directory a profile's downloads land under: its own
+// download folder when one is set, otherwise the main media directory. Every
+// path rendered from a template must be joined to this root — joining to the
+// main directory for a routed profile would download into one library and then
+// look for the file in another.
+func (s *Service) mediaRootFor(profile domain.MediaProfile) string {
+	if profile.DownloadDir != "" {
+		return profile.DownloadDir
+	}
+	return s.deps.MediaDir
 }
 
 // cutoffDateArg formats a cutoff time as yt-dlp's YYYYMMDD --dateafter value, or
@@ -1024,7 +1036,7 @@ func (s *Service) writeShowSidecars(ctx context.Context, source domain.Source, f
 	if profile.MetadataFormat == domain.MetadataMovie {
 		return
 	}
-	showDir, ok := s.showDirFor(filePath)
+	showDir, ok := showDirFor(s.mediaRootFor(profile), filePath)
 	if !ok {
 		return
 	}
@@ -1057,11 +1069,11 @@ func (s *Service) writeShowArtwork(ctx context.Context, source domain.Source, sh
 }
 
 // showDirFor returns the folder a media server treats as the series root: the
-// first directory beneath the media root. It reports false for a flat layout,
-// where the file sits directly in the media root and there is no series folder
-// to describe.
-func (s *Service) showDirFor(filePath string) (string, bool) {
-	rel, err := filepath.Rel(s.deps.MediaDir, filePath)
+// first directory beneath the given media root. It reports false for a flat
+// layout, where the file sits directly in the root and there is no series
+// folder to describe.
+func showDirFor(root, filePath string) (string, bool) {
+	rel, err := filepath.Rel(root, filePath)
 	if err != nil {
 		return "", false
 	}
@@ -1069,7 +1081,7 @@ func (s *Service) showDirFor(filePath string) (string, bool) {
 	if len(parts) < 2 || parts[0] == "" || parts[0] == ".." {
 		return "", false
 	}
-	return filepath.Join(s.deps.MediaDir, parts[0]), true
+	return filepath.Join(root, parts[0]), true
 }
 
 // publishProgress emits a media-progress event with the given percentage.

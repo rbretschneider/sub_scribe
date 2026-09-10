@@ -23,6 +23,21 @@
     <span class="field-hint">Watch, youtu.be, and Shorts links all work. For a whole
       channel or playlist, <a href="/sources/new">add a source</a> instead.</span>
   </div>
+  {{if gt (len .Profiles) 1}}
+  <div class="field">
+    <label for="profile_id">Save as</label>
+    <select id="profile_id" name="profile_id">
+      {{range $index, $profile := .Profiles}}
+      <option value="{{$profile.ID}}"
+        {{if $.ProfileID}}{{selected (printf "%d" $.ProfileID) (printf "%d" $profile.ID)}}{{else if eq $index 0}}selected{{end}}>
+        {{$profile.Name}}{{if $profile.DownloadDir}} → {{$profile.DownloadDir}}{{end}}</option>
+      {{end}}
+    </select>
+    <span class="field-hint">The media profile decides quality, naming, metadata format,
+      and — when the profile has its own download folder — <b>which library</b> the video
+      lands in. Pick a Movies profile to file an IMDb-documented find straight into Plex.</span>
+  </div>
+  {{end}}
   <div class="form-actions">
     <button class="btn btn-primary" type="submit" data-busy="Queuing…">Download</button>
     <a class="btn btn-secondary" href="/library">Cancel</a>

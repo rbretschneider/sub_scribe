@@ -13,6 +13,7 @@ import (
 const (
 	fieldProfileName       = "name"
 	fieldOutputTemplate    = "output_path_template"
+	fieldDownloadDir       = "download_dir"
 	fieldKind              = "kind"
 	fieldQualityFormat     = "quality_format"
 	fieldEmbedMetadata     = "embed_metadata"
@@ -38,6 +39,7 @@ const defaultTemplateHint = "{{ source_name }}/Season {{ upload_year }}/{{ seaso
 type profileFormValues struct {
 	Name                   string
 	OutputPathTemplate     string
+	DownloadDir            string
 	Kind                   string
 	QualityFormat          string
 	MetadataFormat         string
@@ -81,6 +83,7 @@ func readProfileFormValues(r *http.Request) profileFormValues {
 	return profileFormValues{
 		Name:               r.PostFormValue(fieldProfileName),
 		OutputPathTemplate: r.PostFormValue(fieldOutputTemplate),
+		DownloadDir:        r.PostFormValue(fieldDownloadDir),
 		Kind:               r.PostFormValue(fieldKind),
 		QualityFormat:      r.PostFormValue(fieldQualityFormat),
 		MetadataFormat:     r.PostFormValue(fieldMetadataFormat),
@@ -111,6 +114,10 @@ func (v profileFormValues) toProfile() (domain.MediaProfile, error) {
 	if template == "" {
 		return domain.MediaProfile{}, errors.New("Please enter an output path template.")
 	}
+	downloadDir := strings.TrimSpace(v.DownloadDir)
+	if downloadDir != "" && !strings.HasPrefix(downloadDir, "/") {
+		return domain.MediaProfile{}, errors.New("The download folder must be an absolute path inside the container, like /movies — mount it in your compose file first. Leave it empty to use the main media folder.")
+	}
 	kind := domain.MediaKind(v.Kind)
 	if !kind.IsValid() {
 		return domain.MediaProfile{}, errors.New("Please choose whether this profile downloads video or audio.")
@@ -131,6 +138,7 @@ func (v profileFormValues) toProfile() (domain.MediaProfile, error) {
 	return domain.MediaProfile{
 		Name:                   name,
 		OutputPathTemplate:     template,
+		DownloadDir:            downloadDir,
 		Kind:                   kind,
 		QualityFormat:          strings.TrimSpace(v.QualityFormat),
 		MetadataFormat:         metadataFormat,
@@ -164,6 +172,7 @@ func fromProfile(profile domain.MediaProfile) profileFormValues {
 	return profileFormValues{
 		Name:                   profile.Name,
 		OutputPathTemplate:     profile.OutputPathTemplate,
+		DownloadDir:            profile.DownloadDir,
 		Kind:                   string(profile.Kind),
 		QualityFormat:          profile.QualityFormat,
 		MetadataFormat:         string(profile.MetadataFormat),

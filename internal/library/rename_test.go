@@ -269,7 +269,7 @@ func TestApplyNamingTemplateBacksfillsTheShowSidecar(t *testing.T) {
 // is simply never read.
 func TestShowDirIsTheChannelFolderNotTheSeasonFolder(t *testing.T) {
 	h := newHarness(t)
-	got, ok := h.svc.showDirFor(filepath.Join(h.mediaDir, "Chan", "Season 2026", "s2026e010101 - X.mkv"))
+	got, ok := showDirFor(h.mediaDir, filepath.Join(h.mediaDir, "Chan", "Season 2026", "s2026e010101 - X.mkv"))
 	if !ok {
 		t.Fatal("no show directory resolved for a normal channel/season layout")
 	}
@@ -283,7 +283,7 @@ func TestShowDirIsTheChannelFolderNotTheSeasonFolder(t *testing.T) {
 // whole library is one show.
 func TestShowDirRejectsAFlatLayout(t *testing.T) {
 	h := newHarness(t)
-	if dir, ok := h.svc.showDirFor(filepath.Join(h.mediaDir, "loose.mkv")); ok {
+	if dir, ok := showDirFor(h.mediaDir, filepath.Join(h.mediaDir, "loose.mkv")); ok {
 		t.Errorf("resolved a show directory %q for a file in the media root", dir)
 	}
 }

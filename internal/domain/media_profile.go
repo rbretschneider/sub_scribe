@@ -72,6 +72,13 @@ type MediaProfile struct {
 	// maps a Media's metadata to a destination path relative to the media root.
 	OutputPathTemplate string
 
+	// DownloadDir, when set, is the absolute container path this profile's
+	// downloads land under instead of the main media directory — the mechanism
+	// that lets a "Movies" profile file IMDb-documented finds straight into a
+	// Plex movie library while everything else stays in the YouTube archive.
+	// Empty uses the main media directory.
+	DownloadDir string
+
 	Kind          MediaKind
 	QualityFormat string // yt-dlp -f format selector, e.g. "bestvideo[height<=1080]+bestaudio"
 

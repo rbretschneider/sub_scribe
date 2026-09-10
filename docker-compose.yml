@@ -43,6 +43,13 @@ services:
       # scratch directory and only the finished file is moved here, so the
       # mount's poor rename behaviour never breaks a download.
       - ./media:/media
+      # Optional extra libraries, for media profiles that set their own
+      # "Download folder" — the way to file an IMDb-documented movie found on
+      # YouTube straight into your Plex movie library instead of the archive.
+      # Mount the library here, then put the container path (e.g. /movies) in
+      # the profile. Uncomment and point at your real libraries:
+      # - /path/to/your/Movies:/movies
+      # - /path/to/your/TV:/tv
     environment:
       # Point yt-dlp at the provider container on the internal compose network.
       SUBSCRIBE_POT_PROVIDER_URL: "http://pot-provider:4416"

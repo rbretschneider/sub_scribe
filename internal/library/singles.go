@@ -27,18 +27,22 @@ const singlesIndexFrequency = 24 * time.Hour
 // DownloadVideo records one pasted video and queues its download at the
 // front of the line, returning the media id so the caller can watch it.
 //
-// The video lands in an app-managed "One-off downloads" source, which gives it
-// everything a tracked channel's videos get — naming template, sidecars,
-// retries, the library screens — without inventing a parallel pipeline. A video
-// already downloaded or already queued is simply returned; one that previously
-// failed or was skipped is given a fresh attempt.
-func (s *Service) DownloadVideo(ctx context.Context, rawURL string) (int64, error) {
+// The video lands in an app-managed "One-off downloads" source for the chosen
+// profile, which gives it everything a tracked channel's videos get — the
+// profile's naming template, destination folder, sidecar format, retries, the
+// library screens — without inventing a parallel pipeline. That profile choice
+// is what routes an IMDb-documented find into a Plex movie library while
+// ordinary saves stay in the YouTube archive. A zero profileID uses the first
+// (default) profile. A video already downloaded or already queued in that
+// bucket is simply returned; one that previously failed or was skipped is
+// given a fresh attempt.
+func (s *Service) DownloadVideo(ctx context.Context, rawURL string, profileID int64) (int64, error) {
 	externalID, ok := domain.ParseWatchID(rawURL)
 	if !ok {
 		return 0, fmt.Errorf("%w: %q", ErrNotAVideoURL, rawURL)
 	}
 
-	source, err := s.ensureSinglesSource(ctx)
+	source, err := s.ensureSinglesSource(ctx, profileID)
 	if err != nil {
 		return 0, err
 	}
@@ -99,35 +103,34 @@ func (s *Service) enqueueSingleDownload(ctx context.Context, sourceID, mediaID i
 	return nil
 }
 
-// ensureSinglesSource finds the app-managed singles bucket, creating it on
-// first use with the first profile — the seeded default unless the user
-// removed it. The bucket is created through the repository, not AddSource,
-// because it deliberately fails user-input validation (no URL, a collection
-// type forms may not submit).
-func (s *Service) ensureSinglesSource(ctx context.Context) (domain.Source, error) {
+// ensureSinglesSource finds the app-managed singles bucket for a profile,
+// creating it on first use. Each profile gets its own bucket because the
+// profile is what decides where and how a one-off is filed — a movie routed to
+// a Plex library must not share a source with saves bound for the YouTube
+// archive. A zero profileID means the first (default) profile. The bucket is
+// created through the repository, not AddSource, because it deliberately fails
+// user-input validation (no URL, a collection type forms may not submit).
+func (s *Service) ensureSinglesSource(ctx context.Context, profileID int64) (domain.Source, error) {
+	profile, err := s.singlesProfile(ctx, profileID)
+	if err != nil {
+		return domain.Source{}, err
+	}
+
 	sources, err := s.deps.Sources.List(ctx)
 	if err != nil {
 		return domain.Source{}, fmt.Errorf("list sources: %w", err)
 	}
 	for _, source := range sources {
-		if source.CollectionType == domain.CollectionSingles {
+		if source.CollectionType == domain.CollectionSingles && source.MediaProfileID == profile.ID {
 			return source, nil
 		}
 	}
 
-	profiles, err := s.deps.Profiles.List(ctx)
-	if err != nil {
-		return domain.Source{}, fmt.Errorf("list profiles: %w", err)
-	}
-	if len(profiles) == 0 {
-		return domain.Source{}, errors.New("library: no media profile exists to download with")
-	}
-
 	now := s.deps.Clock.Now()
 	source := domain.Source{
-		Name:            singlesSourceName,
+		Name:            singlesBucketName(ctx, s, profile),
 		CollectionType:  domain.CollectionSingles,
-		MediaProfileID:  profiles[0].ID,
+		MediaProfileID:  profile.ID,
 		IndexFrequency:  singlesIndexFrequency,
 		CookieBehavior:  domain.CookieWhenNeeded,
 		ShortsRule:      domain.InclusionInclude,
@@ -142,6 +145,38 @@ func (s *Service) ensureSinglesSource(ctx context.Context) (domain.Source, error
 		return domain.Source{}, fmt.Errorf("create singles source: %w", err)
 	}
 	source.ID = id
-	slog.InfoContext(ctx, "created the one-off downloads bucket", "source_id", id)
+	slog.InfoContext(ctx, "created a one-off downloads bucket",
+		"source_id", id, "profile", profile.Name)
 	return source, nil
+}
+
+// singlesProfile resolves which profile a one-off download uses: the requested
+// one, or the first (default) profile when none was chosen.
+func (s *Service) singlesProfile(ctx context.Context, profileID int64) (domain.MediaProfile, error) {
+	if profileID > 0 {
+		profile, err := s.deps.Profiles.Get(ctx, profileID)
+		if err != nil {
+			return domain.MediaProfile{}, fmt.Errorf("get profile %d: %w", profileID, err)
+		}
+		return profile, nil
+	}
+	profiles, err := s.deps.Profiles.List(ctx)
+	if err != nil {
+		return domain.MediaProfile{}, fmt.Errorf("list profiles: %w", err)
+	}
+	if len(profiles) == 0 {
+		return domain.MediaProfile{}, errors.New("library: no media profile exists to download with")
+	}
+	return profiles[0], nil
+}
+
+// singlesBucketName names a profile's one-off bucket. The default profile keeps
+// the plain name every existing install already has; other profiles get the
+// profile's name appended so the sources list tells the buckets apart.
+func singlesBucketName(ctx context.Context, s *Service, profile domain.MediaProfile) string {
+	profiles, err := s.deps.Profiles.List(ctx)
+	if err == nil && len(profiles) > 0 && profiles[0].ID == profile.ID {
+		return singlesSourceName
+	}
+	return singlesSourceName + " (" + profile.Name + ")"
 }
