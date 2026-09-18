@@ -887,6 +887,7 @@ func (s *Service) downloadOptions(profile domain.MediaProfile, source domain.Sou
 		EmbedThumbnail:   profile.EmbedThumbnail,
 		WriteThumbnail:   profile.WriteThumbnail,
 		EmbedSubtitles:   profile.EmbedSubtitles,
+		WriteSubtitles:   profile.WriteSubtitles,
 		SubtitleLangs:    profile.SubtitleLanguages,
 		SponsorBlockArgs: s.deps.SponsorBlock.Args(profile.SponsorBlockMode, profile.SponsorBlockCategories),
 		ExtraArgs:        profile.ExtraYtdlpArgs,

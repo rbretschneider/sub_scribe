@@ -221,12 +221,39 @@ func TestBuildDownloadArgs(t *testing.T) {
 			}, append(append([]string{}, progressTail...), url)...),
 		},
 		{
-			name: "embed subs without langs omits sub-langs",
+			// Blank languages must mean "English", not "nothing" — an empty list
+			// silently disabling subtitles is exactly the surprise to avoid.
+			name: "embed subs without langs defaults to english",
 			opts: DownloadOptions{Format: "best", OutputPath: out, EmbedSubtitles: true},
 			want: append([]string{
 				"-o", out + ".%(ext)s",
 				"-f", "best",
 				"--embed-subs",
+				"--sub-langs", "en",
+			}, append(append([]string{}, progressTail...), url)...),
+		},
+		{
+			// The Plex/Jellyfin path: subtitles as .srt sidecars, with YouTube's
+			// auto-generated captions accepted so nearly every video gets one.
+			name: "write subtitles produces srt sidecars with the auto fallback",
+			opts: DownloadOptions{Format: "best", OutputPath: out, WriteSubtitles: true},
+			want: append([]string{
+				"-o", out + ".%(ext)s",
+				"-f", "best",
+				"--write-subs", "--write-auto-subs", "--convert-subs", "srt",
+				"--sub-langs", "en",
+			}, append(append([]string{}, progressTail...), url)...),
+		},
+		{
+			name: "write and embed subtitles together name the languages once",
+			opts: DownloadOptions{Format: "best", OutputPath: out,
+				WriteSubtitles: true, EmbedSubtitles: true, SubtitleLangs: []string{"en", "es"}},
+			want: append([]string{
+				"-o", out + ".%(ext)s",
+				"-f", "best",
+				"--write-subs", "--write-auto-subs", "--convert-subs", "srt",
+				"--embed-subs",
+				"--sub-langs", "en,es",
 			}, append(append([]string{}, progressTail...), url)...),
 		},
 	}

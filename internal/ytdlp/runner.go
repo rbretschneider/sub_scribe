@@ -90,6 +90,9 @@ type DownloadOptions struct {
 	// sharing its base name — the layout media servers read as artwork.
 	WriteThumbnail bool
 	EmbedSubtitles bool
+	// WriteSubtitles saves subtitles beside the file as .srt, the sidecar
+	// layout Plex and Jellyfin ingest.
+	WriteSubtitles bool
 	SubtitleLangs  []string
 
 	// SponsorBlockArgs are pre-built yt-dlp arguments from the sponsorblock

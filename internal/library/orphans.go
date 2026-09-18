@@ -16,6 +16,7 @@ import (
 var sidecarExtensions = map[string]bool{
 	".nfo": true,
 	".jpg": true,
+	".srt": true,
 }
 
 // sweepOrphanedSidecars deletes metadata files whose video is gone, returning how

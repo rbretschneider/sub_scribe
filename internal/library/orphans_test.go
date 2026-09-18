@@ -80,11 +80,13 @@ func TestSweepNeverTakesTheSeriesFile(t *testing.T) {
 }
 
 // TestSweepLeavesFilesItDidNotWrite keeps the blast radius to sub_scribe's own
-// output. Someone else's subtitles, artwork, or notes in the same folder are not
-// ours to tidy up.
+// output. Someone else's artwork or notes in the same folder are not ours to
+// tidy up. (.srt left this list when subtitle sidecars became something
+// sub_scribe writes — an orphaned one is now covered by the sweep like .nfo
+// and .jpg always were.)
 func TestSweepLeavesFilesItDidNotWrite(t *testing.T) {
 	h, sourceID, dir := orphanHarness(t)
-	strangers := []string{"notes.txt", "Something Else.srt", "backup.mkv", "art.png"}
+	strangers := []string{"notes.txt", "Something Else.ass", "backup.mkv", "art.png"}
 	for _, name := range strangers {
 		writeFile(t, filepath.Join(dir, name))
 	}
@@ -96,6 +98,27 @@ func TestSweepLeavesFilesItDidNotWrite(t *testing.T) {
 		if !exists(filepath.Join(dir, name)) {
 			t.Errorf("the sweep deleted %s, which sub_scribe never wrote", name)
 		}
+	}
+}
+
+// TestSweepHandlesSubtitleSidecars: a subtitle whose video is present stays —
+// including the "Video.en.srt" language-tagged shape — and one whose video is
+// gone is cleaned up with the rest of the set.
+func TestSweepHandlesSubtitleSidecars(t *testing.T) {
+	h, sourceID, dir := orphanHarness(t)
+	kept := filepath.Join(dir, "Kept.en.srt")
+	orphan := filepath.Join(dir, "Deleted Video.en.srt")
+	writeFile(t, kept)
+	writeFile(t, orphan)
+
+	if _, err := h.svc.sweepOrphanedSidecars(context.Background(), sourceID); err != nil {
+		t.Fatalf("sweepOrphanedSidecars: %v", err)
+	}
+	if !exists(kept) {
+		t.Error("a subtitle was taken from the video that owns it")
+	}
+	if exists(orphan) {
+		t.Error("a subtitle whose video is gone survived the sweep")
 	}
 }
 

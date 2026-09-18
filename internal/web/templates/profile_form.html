@@ -88,12 +88,19 @@
     <p class="field-hint">Writes a <code>.jpg</code> next to each video sharing its
       name — the layout Plex and Jellyfin read as episode artwork. It is also what
       the Library screen shows instead of a placeholder.</p>
+    <label class="checkbox"><input type="checkbox" name="write_subtitles" {{if .Values.WriteSubtitles}}checked{{end}}> Subtitles (.srt)</label>
+    <p class="field-hint">Writes an <code>.srt</code> next to each video — the sidecar
+      Plex and Jellyfin ingest as selectable subtitles. When a video has no real
+      subtitles, YouTube's auto-generated captions stand in, so nearly every
+      download gets one. Untick to stop fetching them.</p>
   </fieldset>
 
   <div class="field">
-    <label for="subtitle_languages">Subtitle languages <span class="optional">(optional, comma-separated)</span></label>
+    <label for="subtitle_languages">Subtitle languages <span class="optional">(comma-separated)</span></label>
     <input id="subtitle_languages" name="subtitle_languages" type="text" autocomplete="off"
            value="{{.Values.SubtitleLanguages}}" placeholder="en, es">
+    <p class="field-hint">Applies to saved and embedded subtitles alike. Left empty,
+      English is fetched rather than nothing.</p>
   </div>
 
   <div class="field">

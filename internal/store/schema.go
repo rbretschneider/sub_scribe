@@ -251,6 +251,15 @@ var migrations = []migration{
 		stmt: `ALTER TABLE media_profiles
 			ADD COLUMN download_dir TEXT NOT NULL DEFAULT ''`,
 	},
+	{
+		version: 21,
+		name:    "add_write_subtitles",
+		// Defaults on, like write_thumbnail before it: an .srt sidecar is what
+		// Plex and Jellyfin ingest as subtitles, obtaining one costs almost
+		// nothing, and existing profiles should gain it without being re-edited.
+		stmt: `ALTER TABLE media_profiles
+			ADD COLUMN write_subtitles INTEGER NOT NULL DEFAULT 1`,
+	},
 }
 
 // backfillFeedTokens assigns a fresh random token to every source created

@@ -20,6 +20,7 @@ const (
 	fieldEmbedThumbnail    = "embed_thumbnail"
 	fieldWriteThumbnail    = "write_thumbnail"
 	fieldEmbedSubtitles    = "embed_subtitles"
+	fieldWriteSubtitles    = "write_subtitles"
 	fieldSubtitleLanguages = "subtitle_languages"
 	fieldSponsorBlockMode  = "sponsorblock_mode"
 	fieldSponsorBlockCats  = "sponsorblock_categories"
@@ -47,6 +48,7 @@ type profileFormValues struct {
 	EmbedThumbnail         bool
 	WriteThumbnail         bool
 	EmbedSubtitles         bool
+	WriteSubtitles         bool
 	SubtitleLanguages      string
 	SponsorBlockMode       string
 	SponsorBlockCategories string
@@ -65,6 +67,8 @@ func defaultProfileFormValues() profileFormValues {
 		EmbedMetadata:      true,
 		EmbedThumbnail:     true,
 		WriteThumbnail:     true,
+		WriteSubtitles:     true,
+		SubtitleLanguages:  "en",
 		SponsorBlockMode:   string(domain.SponsorBlockRemove),
 		// Ticked so the form shows exactly what it will do. Sponsors alone,
 		// because every other category is a judgement call the user should make
@@ -91,6 +95,7 @@ func readProfileFormValues(r *http.Request) profileFormValues {
 		EmbedThumbnail:     isChecked(r, fieldEmbedThumbnail),
 		WriteThumbnail:     isChecked(r, fieldWriteThumbnail),
 		EmbedSubtitles:     isChecked(r, fieldEmbedSubtitles),
+		WriteSubtitles:     isChecked(r, fieldWriteSubtitles),
 		SubtitleLanguages:  r.PostFormValue(fieldSubtitleLanguages),
 		SponsorBlockMode:   r.PostFormValue(fieldSponsorBlockMode),
 		// The categories are checkboxes now, so several values arrive under one
@@ -146,6 +151,7 @@ func (v profileFormValues) toProfile() (domain.MediaProfile, error) {
 		EmbedThumbnail:         v.EmbedThumbnail,
 		WriteThumbnail:         v.WriteThumbnail,
 		EmbedSubtitles:         v.EmbedSubtitles,
+		WriteSubtitles:         v.WriteSubtitles,
 		SubtitleLanguages:      splitCSV(v.SubtitleLanguages),
 		SponsorBlockMode:       mode,
 		SponsorBlockCategories: toCategories(splitCSV(v.SponsorBlockCategories)),
@@ -180,6 +186,7 @@ func fromProfile(profile domain.MediaProfile) profileFormValues {
 		EmbedThumbnail:         profile.EmbedThumbnail,
 		WriteThumbnail:         profile.WriteThumbnail,
 		EmbedSubtitles:         profile.EmbedSubtitles,
+		WriteSubtitles:         profile.WriteSubtitles,
 		SubtitleLanguages:      strings.Join(profile.SubtitleLanguages, ", "),
 		SponsorBlockMode:       string(profile.SponsorBlockMode),
 		SponsorBlockCategories: joinCategories(profile.SponsorBlockCategories),

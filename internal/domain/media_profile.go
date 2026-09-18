@@ -95,7 +95,15 @@ type MediaProfile struct {
 	// gives sub_scribe's own library screen a real image to show.
 	WriteThumbnail bool
 	EmbedSubtitles bool
+	// WriteSubtitles saves subtitles as .srt files beside the media file —
+	// "Video.en.srt" — which is the layout Plex and Jellyfin ingest directly.
+	// YouTube's auto-generated captions stand in when a video has no real
+	// subtitles, so nearly every download gets one. On by default: obtaining
+	// them costs almost nothing and harms nothing.
+	WriteSubtitles bool
 	// SubtitleLanguages are yt-dlp language codes to fetch, e.g. []string{"en"}.
+	// Empty falls back to English rather than fetching nothing, so leaving the
+	// field blank never silently disables the subtitles feature.
 	SubtitleLanguages []string
 
 	SponsorBlockMode       SponsorBlockMode

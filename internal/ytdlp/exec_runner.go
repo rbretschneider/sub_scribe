@@ -274,7 +274,7 @@ func buildDownloadResult(url, filePath string, opts DownloadOptions) (DownloadRe
 
 // partialSuffixes mark yt-dlp's work-in-progress and sidecar files, which are
 // never the finished download.
-var partialSuffixes = []string{".part", ".ytdl", ".temp", ".webp", ".jpg", ".png", ".meta", ".nfo"}
+var partialSuffixes = []string{".part", ".ytdl", ".temp", ".webp", ".jpg", ".png", ".meta", ".nfo", ".srt", ".vtt"}
 
 // findExistingDownload looks for a finished file already sitting at the output
 // path described by opts.

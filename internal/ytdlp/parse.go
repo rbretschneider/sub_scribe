@@ -59,7 +59,19 @@ const (
 	thumbnailFormat = "jpg"
 	flagEmbedSubs   = "--embed-subs"
 	flagSubLangs    = "--sub-langs"
-	flagNewline     = "--newline"
+	// flagWriteSubs and flagWriteAutoSubs together fetch subtitles whenever any
+	// exist: real ones when the creator provided them, YouTube's auto-generated
+	// captions otherwise — which is most videos.
+	flagWriteSubs     = "--write-subs"
+	flagWriteAutoSubs = "--write-auto-subs"
+	// flagConvertSubs turns YouTube's native VTT into the format named next.
+	flagConvertSubs = "--convert-subs"
+	// subtitleFormat is srt because that is the sidecar Plex and Jellyfin ingest.
+	subtitleFormat = "srt"
+	// defaultSubtitleLang keeps an empty language list from silently disabling
+	// subtitles: blank means English, not nothing.
+	defaultSubtitleLang = "en"
+	flagNewline         = "--newline"
 	// flagForceProgress is required because --print puts yt-dlp into quiet mode,
 	// which otherwise silences progress entirely — the template is honoured but
 	// nothing is ever emitted to parse.
@@ -275,7 +287,7 @@ func appendFormat(args []string, opts DownloadOptions) []string {
 	return args
 }
 
-// appendEmbedFlags adds the metadata, thumbnail, and subtitle embed flags.
+// appendEmbedFlags adds the metadata, thumbnail, and subtitle flags.
 func appendEmbedFlags(args []string, opts DownloadOptions) []string {
 	if opts.EmbedMetadata {
 		args = append(args, flagEmbedMetadata)
@@ -286,13 +298,33 @@ func appendEmbedFlags(args []string, opts DownloadOptions) []string {
 	if opts.WriteThumbnail {
 		args = append(args, flagWriteThumbnail, flagConvertThumbnails, thumbnailFormat)
 	}
+	return appendSubtitleFlags(args, opts)
+}
+
+// appendSubtitleFlags requests subtitles as .srt sidecars (WriteSubtitles),
+// muxed into the file (EmbedSubtitles), or both. Auto-generated captions are
+// always accepted as the fallback — most videos have nothing else — and the
+// language list defaults to English rather than to nothing.
+func appendSubtitleFlags(args []string, opts DownloadOptions) []string {
+	if !opts.WriteSubtitles && !opts.EmbedSubtitles {
+		return args
+	}
+	if opts.WriteSubtitles {
+		args = append(args, flagWriteSubs, flagWriteAutoSubs, flagConvertSubs, subtitleFormat)
+	}
 	if opts.EmbedSubtitles {
 		args = append(args, flagEmbedSubs)
-		if len(opts.SubtitleLangs) > 0 {
-			args = append(args, flagSubLangs, strings.Join(opts.SubtitleLangs, subLangSeparator))
-		}
 	}
-	return args
+	return append(args, flagSubLangs, subtitleLangsArg(opts.SubtitleLangs))
+}
+
+// subtitleLangsArg renders the language list for --sub-langs, defaulting to
+// English when none are configured.
+func subtitleLangsArg(langs []string) string {
+	if len(langs) == 0 {
+		return defaultSubtitleLang
+	}
+	return strings.Join(langs, subLangSeparator)
 }
 
 // appendProgressFlags adds the flags that stream progress and print the final

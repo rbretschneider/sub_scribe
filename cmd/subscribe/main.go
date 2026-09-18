@@ -399,6 +399,8 @@ func seedDefaultProfile(ctx context.Context, db *store.DB, svc *library.Service,
 		EmbedMetadata:      true,
 		EmbedThumbnail:     true,
 		WriteThumbnail:     true,
+		WriteSubtitles:     true,
+		SubtitleLanguages:  []string{"en"},
 		SponsorBlockMode:   domain.SponsorBlockRemove,
 		// Sponsors only, and stated rather than implied. The adjacent categories
 		// are far more subjective — "self-promotion" covers a creator talking

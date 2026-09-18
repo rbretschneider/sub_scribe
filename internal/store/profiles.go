@@ -22,7 +22,7 @@ type ProfileRepo struct {
 // profileColumns is the shared SELECT/RETURNING column list, kept in one place so
 // the scan order and the queries can never drift apart.
 const profileColumns = `id, name, output_path_template, download_dir, kind, quality_format,
-	embed_metadata, embed_thumbnail, embed_subtitles, subtitle_languages,
+	embed_metadata, embed_thumbnail, embed_subtitles, write_subtitles, subtitle_languages,
 	sponsorblock_mode, sponsorblock_categories, redownload_after_seconds,
 	metadata_format, extra_ytdlp_args, post_download_command, write_thumbnail,
 	created_at, updated_at`
@@ -43,14 +43,15 @@ func (r *ProfileRepo) Create(ctx context.Context, profile domain.MediaProfile) (
 	}
 	res, err := r.sql.ExecContext(ctx,
 		`INSERT INTO media_profiles(name, output_path_template, download_dir, kind, quality_format,
-			embed_metadata, embed_thumbnail, embed_subtitles, subtitle_languages,
+			embed_metadata, embed_thumbnail, embed_subtitles, write_subtitles, subtitle_languages,
 			sponsorblock_mode, sponsorblock_categories, redownload_after_seconds,
 			metadata_format, extra_ytdlp_args, post_download_command, write_thumbnail,
 			created_at, updated_at)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		profile.Name, profile.OutputPathTemplate, profile.DownloadDir, profile.Kind, profile.QualityFormat,
 		boolToInt(profile.EmbedMetadata), boolToInt(profile.EmbedThumbnail),
-		boolToInt(profile.EmbedSubtitles), subs, profile.SponsorBlockMode, cats,
+		boolToInt(profile.EmbedSubtitles), boolToInt(profile.WriteSubtitles),
+		subs, profile.SponsorBlockMode, cats,
 		toDurationSeconds(profile.RedownloadAfter), profile.MetadataFormat,
 		extraArgs, profile.PostDownloadCommand, boolToInt(profile.WriteThumbnail),
 		profile.CreatedAt.Unix(), profile.UpdatedAt.Unix(),
@@ -116,13 +117,14 @@ func (r *ProfileRepo) Update(ctx context.Context, profile domain.MediaProfile) e
 	if _, err := r.sql.ExecContext(ctx,
 		`UPDATE media_profiles SET name = ?, output_path_template = ?, download_dir = ?, kind = ?,
 			quality_format = ?, embed_metadata = ?, embed_thumbnail = ?, embed_subtitles = ?,
-			subtitle_languages = ?, sponsorblock_mode = ?, sponsorblock_categories = ?,
+			write_subtitles = ?, subtitle_languages = ?, sponsorblock_mode = ?, sponsorblock_categories = ?,
 			redownload_after_seconds = ?, metadata_format = ?, extra_ytdlp_args = ?,
 			post_download_command = ?, write_thumbnail = ?, updated_at = ?
 		 WHERE id = ?`,
 		profile.Name, profile.OutputPathTemplate, profile.DownloadDir, profile.Kind, profile.QualityFormat,
 		boolToInt(profile.EmbedMetadata), boolToInt(profile.EmbedThumbnail),
-		boolToInt(profile.EmbedSubtitles), subs, profile.SponsorBlockMode, cats,
+		boolToInt(profile.EmbedSubtitles), boolToInt(profile.WriteSubtitles),
+		subs, profile.SponsorBlockMode, cats,
 		toDurationSeconds(profile.RedownloadAfter), profile.MetadataFormat,
 		extraArgs, profile.PostDownloadCommand, boolToInt(profile.WriteThumbnail),
 		profile.UpdatedAt.Unix(),
@@ -148,14 +150,14 @@ func scanProfile(row rowScanner) (domain.MediaProfile, error) {
 	var (
 		profile                          domain.MediaProfile
 		embedMeta, embedThumb, embedSubs int64
-		writeThumb                       int64
+		writeThumb, writeSubs            int64
 		subs, cats, extraArgs            string
 		redownloadSecs                   int64
 		createdAt, updatedAt             int64
 	)
 	if err := row.Scan(
 		&profile.ID, &profile.Name, &profile.OutputPathTemplate, &profile.DownloadDir, &profile.Kind,
-		&profile.QualityFormat, &embedMeta, &embedThumb, &embedSubs, &subs,
+		&profile.QualityFormat, &embedMeta, &embedThumb, &embedSubs, &writeSubs, &subs,
 		&profile.SponsorBlockMode, &cats, &redownloadSecs, &profile.MetadataFormat,
 		&extraArgs, &profile.PostDownloadCommand, &writeThumb, &createdAt, &updatedAt,
 	); err != nil {
@@ -177,6 +179,7 @@ func scanProfile(row rowScanner) (domain.MediaProfile, error) {
 	profile.EmbedThumbnail = embedThumb != 0
 	profile.WriteThumbnail = writeThumb != 0
 	profile.EmbedSubtitles = embedSubs != 0
+	profile.WriteSubtitles = writeSubs != 0
 	profile.SubtitleLanguages = languages
 	profile.SponsorBlockCategories = categories
 	profile.ExtraYtdlpArgs = extra
