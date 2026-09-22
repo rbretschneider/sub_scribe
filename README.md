@@ -183,6 +183,33 @@ the app generates and keeps in its database — nothing extra to configure).
 Basic auth may stay enabled alongside SSO for scripts and feed readers, and
 podcast apps use the tokenized feed URLs above.
 
+### MCP server
+
+sub_scribe can serve the [Model Context Protocol](https://modelcontextprotocol.io),
+so an AI assistant (Claude Code, Claude Desktop, anything MCP-capable) can manage
+the archive with tool calls: search the library, inspect the queue and a job's
+yt-dlp logs, save a one-off video (with profile routing), add a channel or
+playlist, trigger scans, retry failures, and delete a source.
+
+Off by default. Enable it by setting a secret:
+
+```yaml
+environment:
+  SUBSCRIBE_MCP_TOKEN: "some-long-random-string"
+```
+
+then point your client at the endpoint:
+
+```bash
+claude mcp add --transport http sub_scribe http://your-host:8080/mcp \
+  --header "Authorization: Bearer some-long-random-string"
+```
+
+The endpoint has its own bearer token because MCP clients cannot complete a
+browser login; it works the same whether or not the UI login is enabled. The
+only destructive tool is `delete_source`, which keeps the downloaded files
+unless explicitly told otherwise — same contract as the UI.
+
 ### Filing real movies and shows into other Plex libraries
 
 Sometimes what's on YouTube is a real, IMDb-documented film or series that
@@ -385,6 +412,7 @@ All configuration is via environment variables (sensible defaults shown):
 | `SUBSCRIBE_YTDLP_PATH` | `yt-dlp` | Path to the yt-dlp binary |
 | `SUBSCRIBE_YTDLP_AUTO_UPDATE` | `true` | Update yt-dlp at every startup, so a restart fixes YouTube breakage; `false` disables |
 | `SUBSCRIBE_USERNAME` / `SUBSCRIBE_PASSWORD` | *(none)* | Set both to require a login (HTTP basic auth) on the whole UI — do this before exposing it beyond your LAN |
+| `SUBSCRIBE_MCP_TOKEN` | *(none)* | Set to enable the [MCP server](#mcp-server) at `/mcp`, with this value as its bearer token |
 | `SUBSCRIBE_OIDC_ISSUER_URL` / `SUBSCRIBE_OIDC_CLIENT_ID` / `SUBSCRIBE_OIDC_CLIENT_SECRET` | *(none)* | Set all three to enable single sign-on via your OpenID Connect provider (see [Single sign-on](#single-sign-on-oidc)) |
 | `SUBSCRIBE_OIDC_BUTTON_LABEL` | `Sign in with SSO` | The login page's button text |
 | `SUBSCRIBE_APPRISE_BINARY` | `apprise` | Path to Apprise (notifications) |

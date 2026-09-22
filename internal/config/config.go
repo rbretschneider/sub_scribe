@@ -43,6 +43,9 @@ const (
 	envOIDCButtonLabel = "SUBSCRIBE_OIDC_BUTTON_LABEL"
 	// envYtDlpUpdate turns off the yt-dlp self-update run at startup.
 	envYtDlpUpdate = "SUBSCRIBE_YTDLP_AUTO_UPDATE"
+	// envMCPToken, when set, enables the MCP server at /mcp with this bearer
+	// token as its secret. Unset leaves the endpoint off entirely.
+	envMCPToken = "SUBSCRIBE_MCP_TOKEN"
 
 	// Throttle settings. All are expressed in seconds except the rate limit,
 	// which takes yt-dlp's own notation. Setting any of them to 0 turns that
@@ -155,6 +158,10 @@ type Config struct {
 	// breakage is fixed by a restart instead of waiting for an image rebuild.
 	YtDlpAutoUpdate bool
 
+	// MCPToken, when set, enables the MCP server at /mcp and is the bearer
+	// token it requires. Empty disables the endpoint.
+	MCPToken string
+
 	// Throttle paces every call to the provider. See the defaults above for why
 	// it is on by default.
 	Throttle Throttle
@@ -261,6 +268,8 @@ func Load(getenv func(key string) string) (Config, error) {
 		return Config{}, err
 	}
 	cfg.YtDlpAutoUpdate = update
+
+	cfg.MCPToken = strings.TrimSpace(getenv(envMCPToken))
 
 	return cfg, nil
 }

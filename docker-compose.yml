@@ -53,6 +53,9 @@ services:
     environment:
       # Point yt-dlp at the provider container on the internal compose network.
       SUBSCRIBE_POT_PROVIDER_URL: "http://pot-provider:4416"
+      # Uncomment to let an AI assistant manage the archive over MCP at /mcp,
+      # authenticated with this token (see the README's "MCP server" section).
+      # SUBSCRIBE_MCP_TOKEN: "generate-a-long-random-string"
       # Pacing. These are the defaults, spelled out here because they are worth
       # knowing about: if you upload your own cookies, every request carries your
       # account, and an account that pulls video after video with no pause is

@@ -28,6 +28,7 @@ import (
 	"sub_scribe/internal/hooks"
 	"sub_scribe/internal/jobs"
 	"sub_scribe/internal/library"
+	"sub_scribe/internal/mcpserver"
 	"sub_scribe/internal/metadata"
 	"sub_scribe/internal/naming"
 	"sub_scribe/internal/notify"
@@ -321,6 +322,18 @@ func buildHTTPHandler(cfg config.Config, deps webDeps) (http.Handler, error) {
 	// The hub is mounted beside the web server, so it needs the same auth gate
 	// or a locked UI would still leak activity through the event stream.
 	mux.Handle(eventsPath, webServer.Protect(deps.hub))
+	// The MCP endpoint carries its own bearer token rather than the web login,
+	// because MCP clients cannot complete a browser sign-in. No token, no
+	// endpoint.
+	if cfg.MCPToken != "" {
+		mux.Handle("/mcp", mcpserver.Handler(mcpserver.Deps{
+			Sources:  deps.svc,
+			Profiles: deps.svc,
+			Library:  deps.svc,
+			Jobs:     deps.tasks,
+			Logs:     deps.logs,
+		}, cfg.MCPToken))
+	}
 	mux.Handle("/", webServer)
 	return mux, nil
 }
