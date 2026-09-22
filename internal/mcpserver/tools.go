@@ -94,7 +94,7 @@ func (t *toolset) listProfiles(ctx context.Context, _ *mcp.CallToolRequest, _ an
 // searchLibraryInput narrows a library search; every field is optional.
 type searchLibraryInput struct {
 	Query    string `json:"query,omitempty" jsonschema:"case-insensitive text to find in video titles"`
-	Status   string `json:"status,omitempty" jsonschema:"downloaded, downloading, queued, failed, unavailable, or skipped"`
+	Status   string `json:"status,omitempty" jsonschema:"downloaded, downloading, queued, failed, unavailable, skipped, or deleted"`
 	SourceID int64  `json:"source_id,omitempty" jsonschema:"limit to one source's videos"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"max results, default 25"`
 }
@@ -259,11 +259,12 @@ func (t *toolset) saveVideo(ctx context.Context, _ *mcp.CallToolRequest, in save
 
 // addSourceInput describes a channel or playlist to start tracking.
 type addSourceInput struct {
-	URL        string `json:"url" jsonschema:"the channel or playlist link"`
-	Type       string `json:"type,omitempty" jsonschema:"channel or playlist; default channel"`
-	Name       string `json:"name,omitempty" jsonschema:"display name; omitted, it is filled from the channel on first scan"`
-	ProfileID  int64  `json:"profile_id,omitempty" jsonschema:"media profile; omit for the default"`
-	CutoffDays int    `json:"cutoff_days,omitempty" jsonschema:"only download videos published within this many days (rolling); omit for the whole back catalog"`
+	URL         string `json:"url" jsonschema:"the channel or playlist link"`
+	Type        string `json:"type,omitempty" jsonschema:"channel or playlist; default channel"`
+	Name        string `json:"name,omitempty" jsonschema:"display name; omitted, it is filled from the channel on first scan"`
+	ProfileID   int64  `json:"profile_id,omitempty" jsonschema:"media profile; omit for the default"`
+	CutoffDays  int    `json:"cutoff_days,omitempty" jsonschema:"only download videos published within this many days (rolling); omit for the whole back catalog"`
+	TitleFilter string `json:"title_filter,omitempty" jsonschema:"Go regular expression; only videos whose title matches are downloaded (use (?i) for case-insensitive)"`
 }
 
 // addSourceOutput reports the created source.
@@ -290,15 +291,16 @@ func (t *toolset) addSource(ctx context.Context, _ *mcp.CallToolRequest, in addS
 	}
 
 	input := library.AddSourceInput{
-		Name:            in.Name,
-		URL:             in.URL,
-		CollectionType:  collection,
-		MediaProfileID:  profileID,
-		IndexFrequency:  defaultIndexFrequency,
-		CookieBehavior:  domain.CookieWhenNeeded,
-		ShortsRule:      domain.InclusionExclude,
-		LivestreamsRule: domain.InclusionExclude,
-		CutoffWindow:    time.Duration(in.CutoffDays) * 24 * time.Hour,
+		Name:               in.Name,
+		URL:                in.URL,
+		CollectionType:     collection,
+		MediaProfileID:     profileID,
+		IndexFrequency:     defaultIndexFrequency,
+		CookieBehavior:     domain.CookieWhenNeeded,
+		ShortsRule:         domain.InclusionExclude,
+		LivestreamsRule:    domain.InclusionExclude,
+		CutoffWindow:       time.Duration(in.CutoffDays) * 24 * time.Hour,
+		TitleFilterPattern: in.TitleFilter,
 	}
 	source, err := t.deps.Sources.AddSource(ctx, input)
 	if err != nil {
@@ -390,6 +392,42 @@ func (t *toolset) deleteSource(ctx context.Context, _ *mcp.CallToolRequest, in d
 	return nil, deleteSourceOutput{Result: outcome}, nil
 }
 
+// deleteMediaInput lists the videos to delete.
+type deleteMediaInput struct {
+	MediaIDs []int64 `json:"media_ids" jsonschema:"the media ids to delete; find them with search_library"`
+}
+
+// deleteMediaResult is the outcome for one requested id.
+type deleteMediaResult struct {
+	MediaID int64  `json:"media_id"`
+	Result  string `json:"result" jsonschema:"deleted, or the reason it was not"`
+}
+
+// deleteMediaOutput reports every requested id's outcome.
+type deleteMediaOutput struct {
+	Deleted int                 `json:"deleted"`
+	Results []deleteMediaResult `json:"results"`
+}
+
+func (t *toolset) deleteMedia(ctx context.Context, _ *mcp.CallToolRequest, in deleteMediaInput) (*mcp.CallToolResult, deleteMediaOutput, error) {
+	if len(in.MediaIDs) == 0 {
+		return toolError[deleteMediaOutput](errors.New("media_ids must name at least one video"))
+	}
+
+	out := deleteMediaOutput{}
+	for _, id := range in.MediaIDs {
+		// One refusal must not abandon the rest of the list undone; each id
+		// reports its own outcome.
+		if err := t.deps.Media.DeleteMedia(ctx, id); err != nil {
+			out.Results = append(out.Results, deleteMediaResult{MediaID: id, Result: err.Error()})
+			continue
+		}
+		out.Deleted++
+		out.Results = append(out.Results, deleteMediaResult{MediaID: id, Result: "deleted"})
+	}
+	return nil, out, nil
+}
+
 // summarizeJob maps a queue entry onto tool output.
 func summarizeJob(item library.JobListItem) jobSummary {
 	return jobSummary{
@@ -422,8 +460,10 @@ func mediaStatusFilter(value string) (domain.MediaStatus, error) {
 		return domain.MediaUnavailable, nil
 	case "skipped":
 		return domain.MediaSkipped, nil
+	case "deleted":
+		return domain.MediaDeleted, nil
 	default:
-		return "", fmt.Errorf("unknown status %q: use downloaded, downloading, queued, failed, unavailable, or skipped", value)
+		return "", fmt.Errorf("unknown status %q: use downloaded, downloading, queued, failed, unavailable, skipped, or deleted", value)
 	}
 }
 

@@ -45,6 +45,10 @@ type MediaRepo interface {
 	// it exists for re-indexing, which must never clobber download state — so
 	// moving a file needs its own narrow operation.
 	SetFilePath(ctx context.Context, id int64, filePath string, now time.Time) error
+	// MarkDeleted tombstones an item the user removed on purpose: status becomes
+	// deleted and the file fields are cleared, while the row survives so a
+	// rescan never re-downloads it.
+	MarkDeleted(ctx context.Context, id int64, now time.Time) error
 	SetError(ctx context.Context, id int64, status domain.MediaStatus, cause string, now time.Time) error
 
 	// CountsByStatus returns the number of media items in each status.

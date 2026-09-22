@@ -39,6 +39,7 @@ type Deps struct {
 	Sources  library.SourceService
 	Profiles library.ProfileService
 	Library  library.LibraryReader
+	Media    library.MediaService
 	Jobs     library.JobReader
 	Logs     LogReader
 }
@@ -106,6 +107,10 @@ func newServer(deps Deps) *mcp.Server {
 		Name:        "delete_source",
 		Description: "Stop tracking a source and forget everything known about it. By default the downloaded video files STAY on disk (reversible: re-adding the source adopts them); set delete_files to also remove the files, which cannot be undone. Confirm with the user before calling this with delete_files.",
 	}, tools.deleteSource)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "delete_media",
+		Description: "Surgically delete individual videos by media id: each one's file and sidecars are removed from disk (IRREVERSIBLE) and the record is tombstoned so a rescan never re-downloads it. Use search_library to find ids first, and confirm the list with the user before calling. Items currently queued or downloading are refused.",
+	}, tools.deleteMedia)
 
 	return server
 }

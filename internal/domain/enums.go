@@ -102,13 +102,18 @@ const (
 	// cannot help, and distinct from MediaSkipped because the user did not ask to
 	// exclude it and probably wants to know it exists.
 	MediaUnavailable MediaStatus = "unavailable"
+	// MediaDeleted is a tombstone: the user removed this item's file on purpose.
+	// The row stays so a rescan that rediscovers the video knows not to fetch it
+	// again — deleting the row instead would leave re-downloading at the mercy
+	// of whatever the source's filters happen to say that day.
+	MediaDeleted MediaStatus = "deleted"
 )
 
 // IsValid reports whether the media status is a recognized value.
 func (m MediaStatus) IsValid() bool {
 	switch m {
 	case MediaPending, MediaDownloading, MediaDownloaded, MediaFailed,
-		MediaSkipped, MediaUnavailable:
+		MediaSkipped, MediaUnavailable, MediaDeleted:
 		return true
 	default:
 		return false

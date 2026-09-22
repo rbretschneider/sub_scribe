@@ -120,6 +120,20 @@ func (r *fakeMediaRepo) Upsert(_ context.Context, media domain.Media) (int64, er
 	return media.ID, nil
 }
 
+func (r *fakeMediaRepo) MarkDeleted(_ context.Context, id int64, now time.Time) error {
+	m, ok := r.items[id]
+	if !ok {
+		return errors.New("media not found")
+	}
+	// Mirror the store: tombstone the status and clear the file fields.
+	m.Status = domain.MediaDeleted
+	m.FilePath = ""
+	m.FileSize = 0
+	m.UpdatedAt = now
+	r.items[id] = m
+	return nil
+}
+
 func (r *fakeMediaRepo) UpsertBatch(ctx context.Context, media []domain.Media) ([]int64, error) {
 	ids := make([]int64, 0, len(media))
 	for _, item := range media {

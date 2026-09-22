@@ -99,6 +99,21 @@ func (f *fakeLibrary) SourceStats(context.Context) (map[int64]library.SourceStat
 }
 func (f *fakeLibrary) RetryAllFailed(context.Context, int64) (int, error) { return f.retryCount, nil }
 
+// fakeMedia records per-video actions; deleteErrs maps ids that must refuse.
+type fakeMedia struct {
+	deleted    []int64
+	deleteErrs map[int64]error
+}
+
+func (f *fakeMedia) RetryMedia(context.Context, int64) error { return nil }
+func (f *fakeMedia) DeleteMedia(_ context.Context, id int64) error {
+	if err, refused := f.deleteErrs[id]; refused {
+		return err
+	}
+	f.deleted = append(f.deleted, id)
+	return nil
+}
+
 // fakeJobs serves queue reads.
 type fakeJobs struct {
 	items      []library.JobListItem
@@ -129,6 +144,7 @@ type harness struct {
 	sources  *fakeSources
 	profiles *fakeProfiles
 	library  *fakeLibrary
+	media    *fakeMedia
 	jobs     *fakeJobs
 	session  *mcp.ClientSession
 }
@@ -142,12 +158,14 @@ func newHarness(t *testing.T) *harness {
 		sources:  &fakeSources{},
 		profiles: &fakeProfiles{profiles: []domain.MediaProfile{{ID: 1, Name: "Default"}}},
 		library:  &fakeLibrary{stats: map[int64]library.SourceStats{}},
+		media:    &fakeMedia{},
 		jobs:     &fakeJobs{counts: map[jobs.TaskStatus]int{}},
 	}
 	server := newServer(Deps{
 		Sources:  h.sources,
 		Profiles: h.profiles,
 		Library:  h.library,
+		Media:    h.media,
 		Jobs:     h.jobs,
 		Logs:     applog.NewBuffer(0),
 	})
@@ -301,6 +319,54 @@ func TestDeleteSourceKeepsFilesUnlessAskedNotTo(t *testing.T) {
 	h.call(t, "delete_source", map[string]any{"source_id": 8, "delete_files": true})
 	if !h.sources.deletedFiles[1] {
 		t.Error("delete_files was not honoured")
+	}
+}
+
+func TestDeleteMediaReportsEveryOutcomeAndContinuesPastRefusals(t *testing.T) {
+	h := newHarness(t)
+	h.media.deleteErrs = map[int64]error{505: library.ErrMediaInFlight}
+
+	got := h.call(t, "delete_media", map[string]any{"media_ids": []int64{504, 505, 506}})
+
+	if len(h.media.deleted) != 2 || h.media.deleted[0] != 504 || h.media.deleted[1] != 506 {
+		t.Errorf("deleted = %v, want [504 506] with 505 refused", h.media.deleted)
+	}
+	if !strings.Contains(got, `"deleted":2`) {
+		t.Errorf("output missing the deleted count:\n%s", got)
+	}
+	// The refused id explains itself instead of vanishing from the report.
+	if !strings.Contains(got, "queued or downloading") {
+		t.Errorf("output missing the refusal reason:\n%s", got)
+	}
+}
+
+func TestDeleteMediaRejectsAnEmptyList(t *testing.T) {
+	h := newHarness(t)
+
+	res, err := h.session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "delete_media", Arguments: map[string]any{"media_ids": []int64{}},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("an empty id list must be a tool error, not a silent no-op")
+	}
+	if len(h.media.deleted) != 0 {
+		t.Errorf("deleted = %v, want none", h.media.deleted)
+	}
+}
+
+func TestAddSourceCarriesTheTitleFilter(t *testing.T) {
+	h := newHarness(t)
+
+	h.call(t, "add_source", map[string]any{
+		"url":          "https://www.youtube.com/@kots",
+		"title_filter": `(?i)fight night \d+`,
+	})
+
+	if h.sources.added.TitleFilterPattern != `(?i)fight night \d+` {
+		t.Errorf("title filter = %q, want the regex passed through", h.sources.added.TitleFilterPattern)
 	}
 }
 

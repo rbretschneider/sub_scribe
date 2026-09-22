@@ -99,10 +99,11 @@ func (f *fakeJobs) RetryAllFailed(_ context.Context, _ int64, _ time.Time, _ tim
 	return 0, nil
 }
 
-// fakeMediaService records retry requests from the media detail screen.
+// fakeMediaService records retry and delete requests.
 type fakeMediaService struct {
-	retried []int64
-	err     error
+	retried      []int64
+	mediaDeleted []int64
+	err          error
 }
 
 func (f *fakeMediaService) RetryMedia(_ context.Context, id int64) error {
@@ -110,6 +111,14 @@ func (f *fakeMediaService) RetryMedia(_ context.Context, id int64) error {
 		return f.err
 	}
 	f.retried = append(f.retried, id)
+	return nil
+}
+
+func (f *fakeMediaService) DeleteMedia(_ context.Context, id int64) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.mediaDeleted = append(f.mediaDeleted, id)
 	return nil
 }
 

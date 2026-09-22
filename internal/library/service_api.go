@@ -172,6 +172,10 @@ type DownloadPacer interface {
 type MediaService interface {
 	// RetryMedia puts a failed or unavailable item back in the download queue.
 	RetryMedia(ctx context.Context, id int64) error
+	// DeleteMedia removes one item's downloaded file and sidecars and
+	// tombstones its record, so a rescan never re-downloads it. It refuses an
+	// item that is queued or downloading.
+	DeleteMedia(ctx context.Context, id int64) error
 }
 
 // AddSourceInput is the validated data required to create or update a source. It

@@ -138,6 +138,8 @@ func statusLabel(status domain.MediaStatus) string {
 		return "Skipped"
 	case domain.MediaUnavailable:
 		return "Unavailable"
+	case domain.MediaDeleted:
+		return "Deleted"
 	default:
 		return string(status)
 	}

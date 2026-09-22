@@ -330,6 +330,7 @@ func buildHTTPHandler(cfg config.Config, deps webDeps) (http.Handler, error) {
 			Sources:  deps.svc,
 			Profiles: deps.svc,
 			Library:  deps.svc,
+			Media:    deps.svc,
 			Jobs:     deps.tasks,
 			Logs:     deps.logs,
 		}, cfg.MCPToken))

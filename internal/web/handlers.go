@@ -76,6 +76,7 @@ var libraryFilters = map[string]domain.MediaStatus{
 	"failed":      domain.MediaFailed,
 	"unavailable": domain.MediaUnavailable,
 	"skipped":     domain.MediaSkipped,
+	"deleted":     domain.MediaDeleted,
 }
 
 // libraryPageLimit caps how many videos the library grid loads at once.

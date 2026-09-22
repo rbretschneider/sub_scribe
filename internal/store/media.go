@@ -103,6 +103,19 @@ func (r *MediaRepo) UpsertBatch(ctx context.Context, media []domain.Media) ([]in
 	return ids, nil
 }
 
+// MarkDeleted tombstones a user-deleted item: the status records the deliberate
+// removal and the file fields are cleared, while the row itself survives so
+// re-indexing recognises the video and never fetches it again.
+func (r *MediaRepo) MarkDeleted(ctx context.Context, id int64, now time.Time) error {
+	if _, err := r.sql.ExecContext(ctx,
+		`UPDATE media SET status = ?, file_path = '', file_size = 0, updated_at = ? WHERE id = ?`,
+		domain.MediaDeleted, now.Unix(), id,
+	); err != nil {
+		return fmt.Errorf("store: mark media %d deleted: %w", id, err)
+	}
+	return nil
+}
+
 // SetFilePath records a media file's new location after it has been moved on
 // disk, leaving status, size, and download history untouched.
 func (r *MediaRepo) SetFilePath(ctx context.Context, id int64, filePath string, now time.Time) error {
