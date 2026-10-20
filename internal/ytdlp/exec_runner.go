@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"sub_scribe/internal/domain"
@@ -177,13 +178,13 @@ func (r *ExecRunner) Download(ctx context.Context, url string, opts DownloadOpti
 		relayStderr(ctx, stderrPipe, &stderr)
 	}()
 
-	filePath := scanDownloadOutput(stdout, onProgress)
+	filePath, height := scanDownloadOutput(stdout, onProgress)
 	<-stderrDone
 	if err := cmd.Wait(); err != nil {
 		return DownloadResult{}, classifyError(
 			fmt.Errorf("yt-dlp download %q: %w: %s", url, err, stderr.String()), stderr.String())
 	}
-	return buildDownloadResult(url, filePath, opts)
+	return buildDownloadResult(url, filePath, height, opts)
 }
 
 // relayStderr logs each line yt-dlp writes to stderr as it arrives and copies it
@@ -218,9 +219,11 @@ func levelForOutput(line string) slog.Level {
 }
 
 // scanDownloadOutput reads yt-dlp's stdout, forwarding progress percentages to
-// onProgress and returning the last after_move file path it printed.
-func scanDownloadOutput(r io.Reader, onProgress ProgressFunc) string {
+// onProgress and returning the last after_move file path and video height it
+// printed. A height of 0 means none was reported.
+func scanDownloadOutput(r io.Reader, onProgress ProgressFunc) (string, int) {
 	var filePath string
+	var height int
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, initialScanBuffer), maxScanBuffer)
 	for scanner.Scan() {
@@ -233,9 +236,13 @@ func scanDownloadOutput(r io.Reader, onProgress ProgressFunc) string {
 		}
 		if path, ok := parseAfterMovePath(line); ok {
 			filePath = path
+			continue
+		}
+		if h, ok := parseAfterMoveHeight(line); ok {
+			height = h
 		}
 	}
-	return filePath
+	return filePath, height
 }
 
 // parseAfterMovePath extracts the final file path from an after_move print line.
@@ -247,8 +254,25 @@ func parseAfterMovePath(line string) (string, bool) {
 	return strings.TrimSpace(strings.TrimPrefix(trimmed, afterMovePrintPrefix)), true
 }
 
-// buildDownloadResult stats the downloaded file to report its size. It is called
-// only after yt-dlp exits successfully.
+// parseAfterMoveHeight extracts the downloaded height from its print line.
+// yt-dlp emits "NA" when the value is unknown — audio-only downloads — which
+// reports false rather than a bogus zero-height video.
+func parseAfterMoveHeight(line string) (int, bool) {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, heightPrintPrefix) {
+		return 0, false
+	}
+	value := strings.TrimSpace(strings.TrimPrefix(trimmed, heightPrintPrefix))
+	height, err := strconv.Atoi(value)
+	if err != nil || height <= 0 {
+		return 0, false
+	}
+	return height, true
+}
+
+// buildDownloadResult stats the downloaded file to report its size. height is
+// what yt-dlp printed for the finished download, or 0 when it reported none. It
+// is called only after yt-dlp exits successfully.
 //
 // A clean exit with no moved-file path has two very different causes. yt-dlp may
 // have declined the item (it failed the --dateafter cutoff), or the file may
@@ -257,7 +281,7 @@ func parseAfterMovePath(line string) (string, bool) {
 // and prints nothing. Treating the second case as a filter match is what turned
 // successfully downloaded videos into "skipped" ones after every restart, so the
 // destination is checked before that conclusion is drawn.
-func buildDownloadResult(url, filePath string, opts DownloadOptions) (DownloadResult, error) {
+func buildDownloadResult(url, filePath string, height int, opts DownloadOptions) (DownloadResult, error) {
 	if filePath == "" {
 		existing, ok := findExistingDownload(opts)
 		if !ok {
@@ -269,7 +293,7 @@ func buildDownloadResult(url, filePath string, opts DownloadOptions) (DownloadRe
 	if err != nil {
 		return DownloadResult{}, fmt.Errorf("yt-dlp download %q: stat output %q: %w", url, filePath, err)
 	}
-	return DownloadResult{FilePath: filePath, FileSize: info.Size()}, nil
+	return DownloadResult{FilePath: filePath, FileSize: info.Size(), Height: height}, nil
 }
 
 // partialSuffixes mark yt-dlp's work-in-progress and sidecar files, which are

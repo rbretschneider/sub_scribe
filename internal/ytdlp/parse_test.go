@@ -136,6 +136,7 @@ func TestBuildDownloadArgs(t *testing.T) {
 		"--progress",
 		"--progress-template", progressTemplateValue,
 		"--print", "after_move:" + afterMovePrintPrefix + "%(filepath)s",
+		"--print", "after_move:" + heightPrintPrefix + "%(height)s",
 		// player client is pinned for every download, appended last before the url.
 		"--extractor-args", playerClientArgPrefix + defaultPlayerClient,
 	}
@@ -329,16 +330,20 @@ func TestScanDownloadOutputOnRealYtDlpOutput(t *testing.T) {
 		progressLinePrefix + "  45.3%\n" +
 		"[Merger] Merging formats into \"GPS Hidden Messages.mkv\"\n" +
 		progressLinePrefix + " 100.0%\n" +
-		afterMovePrintPrefix + "/media/Computerphile/Season 2026/GPS Hidden Messages [2Q6OvYjOJi0].mkv\n"
+		afterMovePrintPrefix + "/media/Computerphile/Season 2026/GPS Hidden Messages [2Q6OvYjOJi0].mkv\n" +
+		heightPrintPrefix + "1080\n"
 
 	var percents []float64
-	got := scanDownloadOutput(strings.NewReader(captured), func(p float64) {
+	got, height := scanDownloadOutput(strings.NewReader(captured), func(p float64) {
 		percents = append(percents, p)
 	})
 
 	want := "/media/Computerphile/Season 2026/GPS Hidden Messages [2Q6OvYjOJi0].mkv"
 	if got != want {
 		t.Fatalf("scanDownloadOutput() = %q, want %q", got, want)
+	}
+	if height != 1080 {
+		t.Fatalf("scanDownloadOutput() height = %d, want 1080", height)
 	}
 	if len(percents) != 3 {
 		t.Errorf("progress callbacks = %d, want 3", len(percents))
@@ -361,5 +366,8 @@ func TestDownloadArgsPrintTemplateCarriesTheMarker(t *testing.T) {
 
 	if !containsPair(args, flagPrint, "after_move:"+afterMovePrintPrefix+"%(filepath)s") {
 		t.Fatalf("--print template does not carry the marker: %v", args)
+	}
+	if !containsPair(args, flagPrint, "after_move:"+heightPrintPrefix+"%(height)s") {
+		t.Fatalf("--print template does not carry the height marker: %v", args)
 	}
 }

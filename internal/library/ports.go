@@ -50,6 +50,11 @@ type MediaRepo interface {
 	// rescan never re-downloads it.
 	MarkDeleted(ctx context.Context, id int64, now time.Time) error
 	SetError(ctx context.Context, id int64, status domain.MediaStatus, cause string, now time.Time) error
+	// SetQualityNote records (or, with an empty note, clears) the warning that a
+	// downloaded file came in far below its profile's quality. It is separate
+	// from SetError because the item is not failed — the file exists and plays —
+	// it is just flagged for re-fetching.
+	SetQualityNote(ctx context.Context, id int64, note string, now time.Time) error
 
 	// CountsByStatus returns the number of media items in each status.
 	CountsByStatus(ctx context.Context) (map[domain.MediaStatus]int, error)

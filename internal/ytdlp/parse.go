@@ -34,6 +34,12 @@ const progressLinePrefix = "subscribe-progress:"
 // declined this item" — so completed downloads were all recorded as skipped.
 const afterMovePrintPrefix = "subscribe-filepath:"
 
+// heightPrintPrefix marks the line carrying the downloaded video's height, so
+// the service layer can tell a 360p fallback apart from the quality the profile
+// actually asked for. Same mechanics as afterMovePrintPrefix: the "after_move:"
+// in the template selects when to print, and this marker is what gets emitted.
+const heightPrintPrefix = "subscribe-height:"
+
 // Live status values that indicate a livestream item.
 const (
 	liveStatusIsLive   = "is_live"
@@ -102,6 +108,10 @@ const (
 	// afterMovePrintValue prints the finished file's path, tagged with our marker,
 	// once yt-dlp has moved it into place.
 	afterMovePrintValue = "after_move:" + afterMovePrintPrefix + "%(filepath)s"
+	// heightPrintValue prints the finished download's vertical resolution, tagged
+	// with our marker. yt-dlp emits "NA" for audio-only downloads, which the
+	// parser treats as unknown.
+	heightPrintValue = "after_move:" + heightPrintPrefix + "%(height)s"
 	subLangSeparator    = ","
 	// potProviderArgPrefix is the yt-dlp extractor-args key for the bgutil HTTP
 	// PO-token provider; the provider's base URL is appended to it.
@@ -328,13 +338,14 @@ func subtitleLangsArg(langs []string) string {
 }
 
 // appendProgressFlags adds the flags that stream progress and print the final
-// file path.
+// file path and resolution.
 func appendProgressFlags(args []string) []string {
 	return append(args,
 		flagNewline,
 		flagForceProgress,
 		flagProgressTemplate, progressTemplateValue,
 		flagPrint, afterMovePrintValue,
+		flagPrint, heightPrintValue,
 	)
 }
 

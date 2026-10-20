@@ -110,6 +110,9 @@ type mediaSummary struct {
 	FilePath  string `json:"file_path,omitempty"`
 	WatchURL  string `json:"watch_url,omitempty"`
 	LastError string `json:"last_error,omitempty"`
+	// QualityNote flags a download that finished far below its profile's quality
+	// (e.g. a 360p fallback during a provider outage) — a re-fetch candidate.
+	QualityNote string `json:"quality_note,omitempty"`
 }
 
 func (t *toolset) searchLibrary(ctx context.Context, _ *mcp.CallToolRequest, in searchLibraryInput) (*mcp.CallToolResult, []mediaSummary, error) {
@@ -135,15 +138,16 @@ func (t *toolset) searchLibrary(ctx context.Context, _ *mcp.CallToolRequest, in 
 	out := make([]mediaSummary, 0, len(items))
 	for _, item := range items {
 		out = append(out, mediaSummary{
-			ID:        item.Media.ID,
-			Title:     item.Media.Metadata.Title,
-			Source:    item.SourceName,
-			Status:    string(item.Media.Status),
-			Published: formatDate(item.Media.Metadata.UploadDate),
-			SizeBytes: item.Media.FileSize,
-			FilePath:  item.Media.FilePath,
-			WatchURL:  item.Media.WatchURL(),
-			LastError: item.Media.LastError,
+			ID:          item.Media.ID,
+			Title:       item.Media.Metadata.Title,
+			Source:      item.SourceName,
+			Status:      string(item.Media.Status),
+			Published:   formatDate(item.Media.Metadata.UploadDate),
+			SizeBytes:   item.Media.FileSize,
+			FilePath:    item.Media.FilePath,
+			WatchURL:    item.Media.WatchURL(),
+			LastError:   item.Media.LastError,
+			QualityNote: item.Media.QualityNote,
 		})
 	}
 	return nil, out, nil

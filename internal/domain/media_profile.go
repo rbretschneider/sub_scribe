@@ -1,6 +1,11 @@
 package domain
 
-import "time"
+import (
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
 
 // SponsorBlockCategory names a segment type from the SponsorBlock database that
 // can be removed or marked in downloaded media.
@@ -122,4 +127,56 @@ type MediaProfile struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// heightCapPattern matches the height bound inside a yt-dlp format selector,
+// e.g. the 1080 in "bestvideo[height<=1080]+bestaudio".
+var heightCapPattern = regexp.MustCompile(`height\s*<=?\s*(\d+)`)
+
+// Thresholds for IsDegradedDownload. The gap between them is deliberately wide:
+// a 720p profile that gets 720p or even 540p is YouTube's normal ladder at
+// work, while a profile asking for HD that receives 480p or less is the
+// signature of the provider withholding every adaptive format — an outage, not
+// a choice.
+const (
+	// degradedRequestFloor is the smallest requested height cap the check
+	// applies to; a profile content with less than HD is never flagged.
+	degradedRequestFloor = 720
+	// degradedActualCeiling is the downloaded height at or below which an
+	// HD-requesting profile's download counts as degraded.
+	degradedActualCeiling = 480
+)
+
+// RequestedHeightCap returns the height bound this profile's format selector
+// asks yt-dlp for, or 0 when the selector sets none (such as a bare
+// "bestvideo+bestaudio").
+func (p MediaProfile) RequestedHeightCap() int {
+	match := heightCapPattern.FindStringSubmatch(p.QualityFormat)
+	if match == nil {
+		return 0
+	}
+	capHeight, err := strconv.Atoi(match[1])
+	if err != nil {
+		return 0
+	}
+	return capHeight
+}
+
+// IsDegradedDownload reports whether a finished download at actualHeight came
+// in far below what this profile asks for: the profile wants HD — a height cap
+// of 720 or more, or an uncapped bestvideo selector — but the file is 480p or
+// less. That combination means the format selector's "/best" fallback fired
+// because the provider offered nothing better — the symptom of a PO-token or
+// extraction outage — and the archived copy is one the user will want
+// re-fetched. An unknown height (0: audio-only or adopted files) is never
+// degraded.
+func (p MediaProfile) IsDegradedDownload(actualHeight int) bool {
+	if actualHeight <= 0 || actualHeight > degradedActualCeiling {
+		return false
+	}
+	capHeight := p.RequestedHeightCap()
+	if capHeight == 0 {
+		return strings.Contains(p.QualityFormat, "bestvideo")
+	}
+	return capHeight >= degradedRequestFloor
 }

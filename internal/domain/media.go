@@ -26,6 +26,13 @@ type Media struct {
 	Attempts  int
 	LastError string
 
+	// QualityNote records that the downloaded file came in far below the quality
+	// its profile asked for (see MediaProfile.IsDegradedDownload). The item still
+	// counts as downloaded — the file is watchable — but the note marks it as a
+	// candidate for re-fetching once the provider serves full quality again.
+	// Empty means the download met its profile.
+	QualityNote string
+
 	DownloadedAt *time.Time
 	CreatedAt    time.Time
 	UpdatedAt    time.Time

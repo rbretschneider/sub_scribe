@@ -63,6 +63,7 @@
           <span class="status {{statusClass .Media.Status}}"><span class="d"></span>{{statusLabel .Media.Status}}</span>
         </div>
         {{if .Media.LastError}}<div class="card-error">{{.Media.LastError}}</div>{{end}}
+        {{if .Media.QualityNote}}<div class="card-warn">{{.Media.QualityNote}}</div>{{end}}
       </div>
     </a>
   </article>
