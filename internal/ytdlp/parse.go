@@ -112,7 +112,7 @@ const (
 	// with our marker. yt-dlp emits "NA" for audio-only downloads, which the
 	// parser treats as unknown.
 	heightPrintValue = "after_move:" + heightPrintPrefix + "%(height)s"
-	subLangSeparator    = ","
+	subLangSeparator = ","
 	// potProviderArgPrefix is the yt-dlp extractor-args key for the bgutil HTTP
 	// PO-token provider; the provider's base URL is appended to it.
 	potProviderArgPrefix = "youtubepot-bgutilhttp:base_url="
