@@ -212,6 +212,20 @@ func (r *fakeMediaRepo) MarkDownloaded(_ context.Context, id int64, filePath str
 	m.FilePath = filePath
 	m.FileSize = size
 	m.DownloadedAt = &now
+	// Mirror the store: a fresh success clears both failure traces.
+	m.LastError = ""
+	m.QualityNote = ""
+	m.UpdatedAt = now
+	r.items[id] = m
+	return nil
+}
+
+func (r *fakeMediaRepo) SetQualityNote(_ context.Context, id int64, note string, now time.Time) error {
+	m, ok := r.items[id]
+	if !ok {
+		return errors.New("media not found")
+	}
+	m.QualityNote = note
 	m.UpdatedAt = now
 	r.items[id] = m
 	return nil
@@ -586,6 +600,81 @@ func TestDownloadMediaAppliesCustomOptionsAndHook(t *testing.T) {
 	if h.hook.calls != 1 || h.hook.lastCommand != "/opt/notify.sh" || h.hook.lastPath != downloadedPath {
 		t.Errorf("hook run = {calls:%d cmd:%q path:%q}, want 1 call for /opt/notify.sh with the file path",
 			h.hook.calls, h.hook.lastCommand, h.hook.lastPath)
+	}
+}
+
+func TestDownloadMediaFlagsADegradedDownload(t *testing.T) {
+	// A profile asking for 1080p that receives a 360p file is the signature of
+	// the provider withholding its adaptive formats. The download is kept — the
+	// file plays — but must carry a quality note instead of passing silently.
+	h := newHarness(t)
+	ctx := context.Background()
+	profileID, err := h.profiles.Create(ctx, domain.MediaProfile{
+		Name: "HD", OutputPathTemplate: "{{ title }}", Kind: domain.MediaVideo,
+		QualityFormat:    "bestvideo[height<=1080]+bestaudio/best",
+		SponsorBlockMode: domain.SponsorBlockOff, MetadataFormat: domain.MetadataMovie,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	src, err := h.svc.AddSource(ctx, validInput(profileID))
+	if err != nil {
+		t.Fatalf("AddSource: %v", err)
+	}
+	mediaID, _ := h.media.Upsert(ctx, domain.Media{
+		SourceID: src.ID, ExternalID: "v1", Status: domain.MediaPending,
+		Metadata: domain.MediaMetadata{Title: "Vid"},
+	})
+	h.runner.result = ytdlp.DownloadResult{
+		FilePath: filepath.Join(h.mediaDir, "Vid.mp4"), FileSize: 10, Height: 360,
+	}
+
+	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+		t.Fatalf("DownloadMedia: %v", err)
+	}
+
+	got, _ := h.media.Get(ctx, mediaID)
+	if got.Status != domain.MediaDownloaded {
+		t.Errorf("status = %q, want downloaded — a degraded file is flagged, not failed", got.Status)
+	}
+	if got.QualityNote == "" {
+		t.Error("QualityNote is empty, want a degraded-quality warning")
+	}
+}
+
+func TestDownloadMediaAtFullQualityCarriesNoNoteAndClearsAnOldOne(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	profileID, err := h.profiles.Create(ctx, domain.MediaProfile{
+		Name: "HD", OutputPathTemplate: "{{ title }}", Kind: domain.MediaVideo,
+		QualityFormat:    "bestvideo[height<=1080]+bestaudio/best",
+		SponsorBlockMode: domain.SponsorBlockOff, MetadataFormat: domain.MetadataMovie,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	src, err := h.svc.AddSource(ctx, validInput(profileID))
+	if err != nil {
+		t.Fatalf("AddSource: %v", err)
+	}
+	// The item already carries a note from a degraded earlier fetch; a re-fetch
+	// that comes in at full quality must shed it.
+	mediaID, _ := h.media.Upsert(ctx, domain.Media{
+		SourceID: src.ID, ExternalID: "v1", Status: domain.MediaPending,
+		Metadata:    domain.MediaMetadata{Title: "Vid"},
+		QualityNote: "degraded quality: downloaded at 360p but the profile asks for up to 1080p",
+	})
+	h.runner.result = ytdlp.DownloadResult{
+		FilePath: filepath.Join(h.mediaDir, "Vid.mkv"), FileSize: 10, Height: 1080,
+	}
+
+	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+		t.Fatalf("DownloadMedia: %v", err)
+	}
+
+	got, _ := h.media.Get(ctx, mediaID)
+	if got.QualityNote != "" {
+		t.Errorf("QualityNote = %q, want empty after a full-quality download", got.QualityNote)
 	}
 }
 

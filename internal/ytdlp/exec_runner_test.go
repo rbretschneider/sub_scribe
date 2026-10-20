@@ -34,15 +34,19 @@ func TestScanDownloadOutput(t *testing.T) {
 		progressLinePrefix + "55.5%",
 		progressLinePrefix + "100.0%",
 		"" + afterMovePrintPrefix + "/media/final.mp4",
+		heightPrintPrefix + "1080",
 	}, "\n")
 
 	var percents []float64
-	filePath := scanDownloadOutput(strings.NewReader(output), func(p float64) {
+	filePath, height := scanDownloadOutput(strings.NewReader(output), func(p float64) {
 		percents = append(percents, p)
 	})
 
 	if filePath != "/media/final.mp4" {
 		t.Errorf("scanDownloadOutput() path = %q, want /media/final.mp4", filePath)
+	}
+	if height != 1080 {
+		t.Errorf("scanDownloadOutput() height = %d, want 1080", height)
 	}
 	want := []float64{10.0, 55.5, 100.0}
 	if len(percents) != len(want) {
@@ -57,15 +61,28 @@ func TestScanDownloadOutput(t *testing.T) {
 
 func TestScanDownloadOutputNilProgress(t *testing.T) {
 	output := "download:50.0%\n" + afterMovePrintPrefix + "/x.mp4"
-	filePath := scanDownloadOutput(strings.NewReader(output), nil)
+	filePath, height := scanDownloadOutput(strings.NewReader(output), nil)
 	if filePath != "/x.mp4" {
 		t.Errorf("scanDownloadOutput() path = %q, want /x.mp4", filePath)
+	}
+	if height != 0 {
+		t.Errorf("scanDownloadOutput() height = %d, want 0 when none is printed", height)
+	}
+}
+
+func TestScanDownloadOutputAudioOnlyHeightIsUnknown(t *testing.T) {
+	// yt-dlp prints "NA" for %(height)s on audio-only downloads; that must read
+	// as unknown, never as a zero-height video.
+	output := afterMovePrintPrefix + "/x.m4a\n" + heightPrintPrefix + "NA"
+	_, height := scanDownloadOutput(strings.NewReader(output), nil)
+	if height != 0 {
+		t.Errorf("scanDownloadOutput() height = %d, want 0 for NA", height)
 	}
 }
 
 func TestBuildDownloadResultEmptyPathIsFilteredOut(t *testing.T) {
 	// No path reported and no destination to check: the item really was declined.
-	_, err := buildDownloadResult("https://x/v", "", DownloadOptions{})
+	_, err := buildDownloadResult("https://x/v", "", 0, DownloadOptions{})
 	if !errors.Is(err, ErrFilteredOut) {
 		t.Errorf("empty path err = %v, want ErrFilteredOut", err)
 	}

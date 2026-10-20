@@ -26,15 +26,15 @@ type MediaRepo struct {
 // the scan order and the queries can never drift apart.
 const mediaColumns = `id, source_id, external_id, title, description, uploader,
 	upload_date, duration_seconds, is_short, is_livestream, status, file_path,
-	file_size, attempts, last_error, downloaded_at, created_at, updated_at`
+	file_size, attempts, last_error, quality_note, downloaded_at, created_at, updated_at`
 
 // upsertMediaSQL inserts a media item or, when one already exists for the same
 // source and external id, refreshes only its metadata columns — never the
 // download lifecycle (status, file_path, file_size, downloaded_at).
 const upsertMediaSQL = `INSERT INTO media(source_id, external_id, title, description, uploader,
 		upload_date, duration_seconds, is_short, is_livestream, status, file_path,
-		file_size, attempts, last_error, downloaded_at, created_at, updated_at)
-	 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		file_size, attempts, last_error, quality_note, downloaded_at, created_at, updated_at)
+	 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	 ON CONFLICT(source_id, external_id) DO UPDATE SET
 		title = excluded.title,
 		description = excluded.description,
@@ -55,7 +55,7 @@ func upsertMediaArgs(media domain.Media) []any {
 		toDurationSeconds(media.Metadata.Duration),
 		boolToInt(media.Metadata.IsShort), boolToInt(media.Metadata.IsLivestream),
 		media.Status, media.FilePath, media.FileSize, media.Attempts,
-		media.LastError, toNullUnix(media.DownloadedAt),
+		media.LastError, media.QualityNote, toNullUnix(media.DownloadedAt),
 		media.CreatedAt.Unix(), media.UpdatedAt.Unix(),
 	}
 }
@@ -213,13 +213,27 @@ func (r *MediaRepo) SetStatus(ctx context.Context, id int64, status domain.Media
 
 // MarkDownloaded records a successful download: it stores the file location and
 // size, stamps the download time, and moves the item to the downloaded status.
+// The quality note is cleared along with the last error, so a re-fetch that
+// comes in at full quality sheds the degraded flag by itself.
 func (r *MediaRepo) MarkDownloaded(ctx context.Context, id int64, filePath string, size int64, now time.Time) error {
 	if _, err := r.sql.ExecContext(ctx,
 		`UPDATE media SET status = ?, file_path = ?, file_size = ?,
-			downloaded_at = ?, last_error = '', updated_at = ? WHERE id = ?`,
+			downloaded_at = ?, last_error = '', quality_note = '', updated_at = ? WHERE id = ?`,
 		domain.MediaDownloaded, filePath, size, now.Unix(), now.Unix(), id,
 	); err != nil {
 		return fmt.Errorf("store: mark downloaded %d: %w", id, err)
+	}
+	return nil
+}
+
+// SetQualityNote records (or clears) the warning that a downloaded file came in
+// below its profile's quality, leaving status and download history untouched.
+func (r *MediaRepo) SetQualityNote(ctx context.Context, id int64, note string, now time.Time) error {
+	if _, err := r.sql.ExecContext(ctx,
+		`UPDATE media SET quality_note = ?, updated_at = ? WHERE id = ?`,
+		note, now.Unix(), id,
+	); err != nil {
+		return fmt.Errorf("store: set quality note %d: %w", id, err)
 	}
 	return nil
 }
@@ -429,8 +443,8 @@ func (r *MediaRepo) GetWithSource(ctx context.Context, id int64) (library.MediaL
 // for the join query in ListWithSource.
 const prefixedMediaColumns = `m.id, m.source_id, m.external_id, m.title, m.description,
 	m.uploader, m.upload_date, m.duration_seconds, m.is_short, m.is_livestream,
-	m.status, m.file_path, m.file_size, m.attempts, m.last_error, m.downloaded_at,
-	m.created_at, m.updated_at`
+	m.status, m.file_path, m.file_size, m.attempts, m.last_error, m.quality_note,
+	m.downloaded_at, m.created_at, m.updated_at`
 
 // extraScanner adapts a rowScanner so a helper that scans a fixed column set can
 // be reused for a query that selects additional trailing columns. Without this,
@@ -461,8 +475,8 @@ func scanMediaWithSource(rows rowScanner) (domain.Media, string, error) {
 		&media.ID, &media.SourceID, &media.ExternalID, &media.Metadata.Title,
 		&media.Metadata.Description, &media.Metadata.Uploader, &uploadDate,
 		&durationSecs, &isShort, &isLivestream, &media.Status, &media.FilePath,
-		&media.FileSize, &media.Attempts, &media.LastError, &downloadedAt,
-		&createdAt, &updatedAt, &sourceName,
+		&media.FileSize, &media.Attempts, &media.LastError, &media.QualityNote,
+		&downloadedAt, &createdAt, &updatedAt, &sourceName,
 	); err != nil {
 		return domain.Media{}, "", err
 	}
@@ -508,8 +522,8 @@ func scanMedia(row rowScanner) (domain.Media, error) {
 		&media.ID, &media.SourceID, &media.ExternalID, &media.Metadata.Title,
 		&media.Metadata.Description, &media.Metadata.Uploader, &uploadDate,
 		&durationSecs, &isShort, &isLivestream, &media.Status, &media.FilePath,
-		&media.FileSize, &media.Attempts, &media.LastError, &downloadedAt,
-		&createdAt, &updatedAt,
+		&media.FileSize, &media.Attempts, &media.LastError, &media.QualityNote,
+		&downloadedAt, &createdAt, &updatedAt,
 	); err != nil {
 		return domain.Media{}, err
 	}

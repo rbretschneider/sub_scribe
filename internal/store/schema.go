@@ -260,6 +260,16 @@ var migrations = []migration{
 		stmt: `ALTER TABLE media_profiles
 			ADD COLUMN write_subtitles INTEGER NOT NULL DEFAULT 1`,
 	},
+	{
+		version: 22,
+		name:    "add_media_quality_note",
+		// Records that a download finished far below its profile's quality cap —
+		// the 360p fallback a PO-token outage produces — so degraded items are
+		// visible and queryable instead of silently archived. Empty means the
+		// download met its profile.
+		stmt: `ALTER TABLE media
+			ADD COLUMN quality_note TEXT NOT NULL DEFAULT ''`,
+	},
 }
 
 // backfillFeedTokens assigns a fresh random token to every source created

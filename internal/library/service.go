@@ -760,6 +760,9 @@ func (s *Service) DownloadMedia(ctx context.Context, mediaID int64) error {
 	if err := s.deps.Media.MarkDownloaded(ctx, mediaID, res.FilePath, res.FileSize, now); err != nil {
 		return fmt.Errorf("mark downloaded: %w", err)
 	}
+	if profile.IsDegradedDownload(res.Height) {
+		s.flagDegradedQuality(ctx, mediaID, media, profile, res.Height, now)
+	}
 	s.finalizeDownload(ctx, source, media, res.FilePath, profile)
 	s.deps.Events.Publish(events.Event{
 		Kind:    events.KindMediaCompleted,
@@ -767,6 +770,33 @@ func (s *Service) DownloadMedia(ctx context.Context, mediaID int64) error {
 		Title:   media.Metadata.Title,
 	})
 	return nil
+}
+
+// flagDegradedQuality records that a finished download came in far below the
+// quality its profile asks for. The download is accepted and flagged rather
+// than failed: the file plays, and retrying in the middle of a provider outage
+// would only stall the queue — but silently archiving 360p where 1080p was
+// asked for is how a month of degraded downloads once went unnoticed, so the
+// item is marked for the UI, the MCP tools, and an eventual re-fetch.
+func (s *Service) flagDegradedQuality(ctx context.Context, mediaID int64, media domain.Media, profile domain.MediaProfile, height int, now time.Time) {
+	note := degradedQualityNote(profile, height)
+	slog.WarnContext(ctx, "download finished far below the profile's quality",
+		"media_id", mediaID, "title", media.Metadata.Title,
+		"height", height, "requested_cap", profile.RequestedHeightCap())
+	if err := s.deps.Media.SetQualityNote(ctx, mediaID, note, now); err != nil {
+		// The download itself succeeded; losing only the note is the lesser harm,
+		// and this is where that failure is finally handled.
+		log.Printf("library: record quality note for media %d: %v", mediaID, err)
+	}
+}
+
+// degradedQualityNote words the stored warning. The requested cap may be 0 for
+// an uncapped bestvideo selector, which reads better as the selector itself.
+func degradedQualityNote(profile domain.MediaProfile, height int) string {
+	if requested := profile.RequestedHeightCap(); requested > 0 {
+		return fmt.Sprintf("degraded quality: downloaded at %dp but the profile asks for up to %dp", height, requested)
+	}
+	return fmt.Sprintf("degraded quality: downloaded at %dp but the profile asks for the best available", height)
 }
 
 // awaitDownloadSlot asks the pacer whether this download may start. When it may

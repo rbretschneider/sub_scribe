@@ -42,6 +42,15 @@
   </dl>
 </div>
 
+{{if .Item.Media.QualityNote}}
+<div class="panel panel-warn">
+  <h2 class="panel-title">Quality warning</h2>
+  <p>{{.Item.Media.QualityNote}}</p>
+  <p class="muted">The file plays, but was downloaded while the provider was
+    withholding its better formats. Delete and re-save it to fetch a full-quality copy.</p>
+</div>
+{{end}}
+
 {{if .Item.Media.LastError}}
 <div class="panel panel-danger">
   <h2 class="panel-title">Last error</h2>

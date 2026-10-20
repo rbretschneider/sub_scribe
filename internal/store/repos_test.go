@@ -399,6 +399,37 @@ func TestMediaMarkDownloadedAndSetError(t *testing.T) {
 	}
 }
 
+func TestMediaQualityNoteRoundTripsAndClearsOnRedownload(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	profile := seedProfile(t, db)
+	src := seedSource(t, db, profile.ID, true, nil)
+
+	id, err := db.Media().Upsert(ctx, newMedia(src.ID, "a", domain.MediaPending))
+	if err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	when := unixTime(1_700_070_000)
+	const note = "degraded quality: downloaded at 360p but the profile asks for up to 1080p"
+	if err := db.Media().SetQualityNote(ctx, id, note, when); err != nil {
+		t.Fatalf("SetQualityNote: %v", err)
+	}
+	got, _ := db.Media().Get(ctx, id)
+	if got.QualityNote != note {
+		t.Errorf("QualityNote = %q, want %q", got.QualityNote, note)
+	}
+
+	// A later download at full quality must shed the flag by itself.
+	if err := db.Media().MarkDownloaded(ctx, id, "/x.mkv", 99, when); err != nil {
+		t.Fatalf("MarkDownloaded: %v", err)
+	}
+	got, _ = db.Media().Get(ctx, id)
+	if got.QualityNote != "" {
+		t.Errorf("MarkDownloaded should clear the quality note, got %q", got.QualityNote)
+	}
+}
+
 func TestMediaListByStatus(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

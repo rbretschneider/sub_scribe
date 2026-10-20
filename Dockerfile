@@ -31,8 +31,13 @@ FROM alpine:3.22
 #   --js-runtimes node       nodejs solves YouTube's player signatures
 #   --remote-components      fetches yt-dlp's EJS solver script; without it
 #     ejs:github             YouTube's "n challenge" fails and formats go missing
+# The bgutil plugin is pinned because it must match the provider *server*
+# container's version (brainicism/bgutil-ytdlp-pot-provider in
+# docker-compose.yml) — a mismatch makes yt-dlp warn on every invocation and,
+# at worst, breaks PO tokens entirely, which YouTube answers by serving only
+# the 360p progressive format. Bump this pin when the server image updates.
 RUN apk add --no-cache ca-certificates ffmpeg nodejs python3 py3-pip \
-    && pip install --no-cache-dir --break-system-packages yt-dlp apprise bgutil-ytdlp-pot-provider \
+    && pip install --no-cache-dir --break-system-packages yt-dlp apprise bgutil-ytdlp-pot-provider==2.0.2 \
     && printf -- '--js-runtimes node\n--remote-components ejs:github\n' > /etc/yt-dlp.conf \
     && rm -rf /root/.cache
 

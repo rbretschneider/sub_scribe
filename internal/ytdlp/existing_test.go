@@ -26,7 +26,7 @@ func TestAlreadyDownloadedFileIsNotMistakenForAFilteredOne(t *testing.T) {
 	relative := filepath.Join("Computerphile", "Season 2026", "GPS Hidden Messages [2Q6OvYjOJi0]")
 	writeFile(t, filepath.Join(home, relative+".mkv"))
 
-	result, err := buildDownloadResult("https://example.com/v", "",
+	result, err := buildDownloadResult("https://example.com/v", "", 0,
 		DownloadOptions{OutputPath: relative, HomeDir: home})
 	if err != nil {
 		t.Fatalf("buildDownloadResult: %v", err)
@@ -47,7 +47,7 @@ func TestNothingOnDiskIsStillReportedAsFiltered(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	_, err := buildDownloadResult("https://example.com/v", "",
+	_, err := buildDownloadResult("https://example.com/v", "", 0,
 		DownloadOptions{OutputPath: relative, HomeDir: home})
 
 	if !errors.Is(err, ErrFilteredOut) {
@@ -62,7 +62,7 @@ func TestPartialAndSidecarFilesDoNotCountAsADownload(t *testing.T) {
 		writeFile(t, filepath.Join(home, relative+suffix))
 	}
 
-	_, err := buildDownloadResult("https://example.com/v", "",
+	_, err := buildDownloadResult("https://example.com/v", "", 0,
 		DownloadOptions{OutputPath: relative, HomeDir: home})
 
 	if !errors.Is(err, ErrFilteredOut) {
@@ -77,7 +77,7 @@ func TestBracketsInTitlesAreMatchedLiterally(t *testing.T) {
 	relative := filepath.Join("Chan", "Tricky [a-z] Title [xyz123]")
 	writeFile(t, filepath.Join(home, relative+".mp4"))
 
-	result, err := buildDownloadResult("https://example.com/v", "",
+	result, err := buildDownloadResult("https://example.com/v", "", 0,
 		DownloadOptions{OutputPath: relative, HomeDir: home})
 	if err != nil {
 		t.Fatalf("buildDownloadResult: %v", err)
@@ -93,7 +93,7 @@ func TestAmbiguousLeftoversAreNotGuessedAt(t *testing.T) {
 	writeFile(t, filepath.Join(home, relative+".mkv"))
 	writeFile(t, filepath.Join(home, relative+".mp4"))
 
-	_, err := buildDownloadResult("https://example.com/v", "",
+	_, err := buildDownloadResult("https://example.com/v", "", 0,
 		DownloadOptions{OutputPath: relative, HomeDir: home})
 
 	if !errors.Is(err, ErrFilteredOut) {
@@ -108,7 +108,7 @@ func TestReportedPathIsAlwaysPreferredOverASearch(t *testing.T) {
 	writeFile(t, reported)
 	writeFile(t, filepath.Join(home, relative+".mp4"))
 
-	result, err := buildDownloadResult("https://example.com/v", reported,
+	result, err := buildDownloadResult("https://example.com/v", reported, 0,
 		DownloadOptions{OutputPath: relative, HomeDir: home})
 	if err != nil {
 		t.Fatalf("buildDownloadResult: %v", err)

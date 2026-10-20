@@ -115,6 +115,11 @@ type DownloadOptions struct {
 type DownloadResult struct {
 	FilePath string
 	FileSize int64
+	// Height is the downloaded video's vertical resolution in pixels, or 0 when
+	// unknown — audio-only downloads, and files adopted from disk rather than
+	// freshly fetched. It is what lets the service notice a download that came in
+	// far below the quality its profile asked for.
+	Height int
 }
 
 // ProgressFunc receives download progress as a percentage in [0,100]. It may be
