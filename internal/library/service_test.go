@@ -1187,6 +1187,35 @@ func TestAddSourceValidation(t *testing.T) {
 	}
 }
 
+func TestUpdateSourceStoresASchemedYouTubeURL(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	profileID := h.seedProfile(t)
+	src, err := h.svc.AddSource(ctx, validInput(profileID))
+	if err != nil {
+		t.Fatalf("AddSource: %v", err)
+	}
+
+	in := validInput(profileID)
+	in.URL = "www.youtube.com/@example"
+	updated, err := h.svc.UpdateSource(ctx, src.ID, in)
+	if err != nil {
+		t.Fatalf("UpdateSource: %v", err)
+	}
+
+	const want = "https://www.youtube.com/@example"
+	if updated.URL != want {
+		t.Errorf("returned URL = %q, want %q", updated.URL, want)
+	}
+	stored, err := h.sources.Get(ctx, src.ID)
+	if err != nil {
+		t.Fatalf("get stored source: %v", err)
+	}
+	if stored.URL != want {
+		t.Errorf("stored URL = %q, want %q", stored.URL, want)
+	}
+}
+
 func TestRequestScanEnqueuesHighPriorityIndex(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
