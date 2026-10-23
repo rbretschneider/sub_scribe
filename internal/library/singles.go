@@ -37,6 +37,7 @@ const singlesIndexFrequency = 24 * time.Hour
 // bucket is simply returned; one that previously failed or was skipped is
 // given a fresh attempt.
 func (s *Service) DownloadVideo(ctx context.Context, rawURL string, profileID int64) (int64, error) {
+	rawURL = domain.NormalizeYouTubeURL(rawURL)
 	externalID, ok := domain.ParseWatchID(rawURL)
 	if !ok {
 		return 0, fmt.Errorf("%w: %q", ErrNotAVideoURL, rawURL)

@@ -1187,6 +1187,35 @@ func TestAddSourceValidation(t *testing.T) {
 	}
 }
 
+func TestUpdateSourceStoresASchemedYouTubeURL(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	profileID := h.seedProfile(t)
+	src, err := h.svc.AddSource(ctx, validInput(profileID))
+	if err != nil {
+		t.Fatalf("AddSource: %v", err)
+	}
+
+	in := validInput(profileID)
+	in.URL = "www.youtube.com/@example"
+	updated, err := h.svc.UpdateSource(ctx, src.ID, in)
+	if err != nil {
+		t.Fatalf("UpdateSource: %v", err)
+	}
+
+	const want = "https://www.youtube.com/@example"
+	if updated.URL != want {
+		t.Errorf("returned URL = %q, want %q", updated.URL, want)
+	}
+	stored, err := h.sources.Get(ctx, src.ID)
+	if err != nil {
+		t.Fatalf("get stored source: %v", err)
+	}
+	if stored.URL != want {
+		t.Errorf("stored URL = %q, want %q", stored.URL, want)
+	}
+}
+
 func TestRequestScanEnqueuesHighPriorityIndex(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
@@ -1763,4 +1792,36 @@ func (r *fakeMediaRepo) SetFilePath(_ context.Context, id int64, filePath string
 	m.UpdatedAt = now
 	r.items[id] = m
 	return nil
+}
+
+func TestAddSourceNormalisesSchemelessYouTubeURLs(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"youtube host gains a scheme", "www.youtube.com/@example", "https://www.youtube.com/@example"},
+		{"other host is stored unchanged", "example.com/video", "example.com/video"},
+		{"schemed url is stored unchanged", "https://www.youtube.com/@example", "https://www.youtube.com/@example"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			profileID := h.seedProfile(t)
+			in := validInput(profileID)
+			in.URL = tc.in
+
+			src, err := h.svc.AddSource(context.Background(), in)
+			if err != nil {
+				t.Fatalf("AddSource: %v", err)
+			}
+			got, err := h.sources.Get(context.Background(), src.ID)
+			if err != nil {
+				t.Fatalf("get source: %v", err)
+			}
+			if got.URL != tc.want {
+				t.Errorf("stored URL = %q, want %q", got.URL, tc.want)
+			}
+		})
+	}
 }
