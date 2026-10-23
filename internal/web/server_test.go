@@ -661,3 +661,21 @@ func loggedOutCookies() string {
 	expiry := testNow.Add(60 * 24 * time.Hour).Unix()
 	return fmt.Sprintf(".youtube.com\tTRUE\t/\tTRUE\t%d\tPREF\tf6%%3D0\n", expiry)
 }
+
+func TestSourceNewUsesATextInputForTheURL(t *testing.T) {
+	server := newTestServer(t, &fakeSources{}, &fakeProfiles{}, filepath.Join(t.TempDir(), "c.txt"))
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sources/new", nil))
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="url"`) {
+		t.Error("form is missing the url field")
+	}
+	if strings.Contains(body, `type="url"`) {
+		t.Error(`url field must not use type="url"; the browser would block links without a scheme`)
+	}
+	if !strings.Contains(body, `inputmode="url"`) {
+		t.Error(`url field should keep inputmode="url"`)
+	}
+}

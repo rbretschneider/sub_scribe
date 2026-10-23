@@ -1764,3 +1764,35 @@ func (r *fakeMediaRepo) SetFilePath(_ context.Context, id int64, filePath string
 	r.items[id] = m
 	return nil
 }
+
+func TestAddSourceNormalisesSchemelessYouTubeURLs(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"youtube host gains a scheme", "www.youtube.com/@example", "https://www.youtube.com/@example"},
+		{"other host is stored unchanged", "example.com/video", "example.com/video"},
+		{"schemed url is stored unchanged", "https://www.youtube.com/@example", "https://www.youtube.com/@example"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			profileID := h.seedProfile(t)
+			in := validInput(profileID)
+			in.URL = tc.in
+
+			src, err := h.svc.AddSource(context.Background(), in)
+			if err != nil {
+				t.Fatalf("AddSource: %v", err)
+			}
+			got, err := h.sources.Get(context.Background(), src.ID)
+			if err != nil {
+				t.Fatalf("get source: %v", err)
+			}
+			if got.URL != tc.want {
+				t.Errorf("stored URL = %q, want %q", got.URL, tc.want)
+			}
+		})
+	}
+}

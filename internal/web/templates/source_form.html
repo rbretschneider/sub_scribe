@@ -16,7 +16,7 @@
 <form class="form" method="post" action="{{.Action}}">
   <div class="field">
     <label for="url">Channel or playlist link</label>
-    <input id="url" name="url" type="url" required autocomplete="off"
+    <input id="url" name="url" type="text" inputmode="url" required autocomplete="off"
            value="{{.Values.URL}}" placeholder="https://www.youtube.com/@example">
     <p class="field-hint">Open the channel or playlist on YouTube and copy the link from your browser's address bar.</p>
   </div>

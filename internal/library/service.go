@@ -242,6 +242,7 @@ func (s *Service) normalizeAndValidate(ctx context.Context, input AddSourceInput
 	if strings.TrimSpace(input.URL) == "" {
 		return input, errURLRequired
 	}
+	input.URL = domain.NormalizeYouTubeURL(input.URL)
 	if !input.CollectionType.IsValid() {
 		return input, fmt.Errorf("invalid collection type %q", input.CollectionType)
 	}

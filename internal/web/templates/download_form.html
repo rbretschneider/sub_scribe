@@ -18,7 +18,7 @@
 <form class="form" method="post" action="/downloads">
   <div class="field">
     <label for="url">Video link</label>
-    <input id="url" name="url" type="url" required value="{{.URL}}"
+    <input id="url" name="url" type="text" inputmode="url" required value="{{.URL}}"
            placeholder="https://www.youtube.com/watch?v=…" autofocus>
     <span class="field-hint">Watch, youtu.be, and Shorts links all work. For a whole
       channel or playlist, <a href="/sources/new">add a source</a> instead.</span>

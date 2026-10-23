@@ -194,3 +194,31 @@ func TestDownloadVideoRoutesByProfileIntoItsOwnBucketAndFolder(t *testing.T) {
 		t.Errorf("media root without a download dir = %q, want the main media dir %q", got, h.mediaDir)
 	}
 }
+
+func TestDownloadVideoAcceptsSchemelessYouTubeLinks(t *testing.T) {
+	for _, raw := range []string{"youtu.be/gCZOjDar1tU", "youtube.com/watch?v=gCZOjDar1tU"} {
+		h := newHarness(t)
+		h.seedProfile(t)
+		ctx := context.Background()
+
+		id, err := h.svc.DownloadVideo(ctx, raw, 0)
+		if err != nil {
+			t.Fatalf("DownloadVideo(%q): %v", raw, err)
+		}
+		media, err := h.media.Get(ctx, id)
+		if err != nil {
+			t.Fatalf("get media: %v", err)
+		}
+		if media.ExternalID != "gCZOjDar1tU" {
+			t.Errorf("DownloadVideo(%q) external id = %q, want gCZOjDar1tU", raw, media.ExternalID)
+		}
+	}
+}
+
+func TestDownloadVideoStillRejectsSchemelessOtherHosts(t *testing.T) {
+	h := newHarness(t)
+	h.seedProfile(t)
+	if _, err := h.svc.DownloadVideo(context.Background(), "example.com/video", 0); !errors.Is(err, ErrNotAVideoURL) {
+		t.Errorf("err = %v, want ErrNotAVideoURL", err)
+	}
+}

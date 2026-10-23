@@ -103,6 +103,35 @@ func validWatchID(candidate string) (string, bool) {
 	return candidate, true
 }
 
+// schemePattern matches a leading URL scheme such as "https://".
+var schemePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://`)
+
+// youTubeHosts are the hosts whose scheme-less links are given a default scheme.
+var youTubeHosts = map[string]bool{
+	"youtube.com":     true,
+	"www.youtube.com": true,
+	"m.youtube.com":   true,
+	"youtu.be":        true,
+}
+
+// NormalizeYouTubeURL prefixes "https://" to a link that has no scheme and
+// whose host is exactly one of the YouTube hosts. Every other input, including
+// links that already carry a scheme, is returned unchanged.
+func NormalizeYouTubeURL(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if schemePattern.MatchString(trimmed) {
+		return raw
+	}
+	host := trimmed
+	if i := strings.IndexAny(trimmed, "/?#"); i >= 0 {
+		host = trimmed[:i]
+	}
+	if !youTubeHosts[strings.ToLower(host)] {
+		return raw
+	}
+	return "https://" + trimmed
+}
+
 // MediaMetadata is the descriptive information yt-dlp reports for an item. It is
 // a value object: pure data used by naming, filtering, and metadata-file
 // generation, with no identity of its own.

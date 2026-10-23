@@ -99,3 +99,21 @@ func TestDownloadCreateExplainsANonVideoLink(t *testing.T) {
 		t.Error("the pasted text should be preserved for correction")
 	}
 }
+
+func TestDownloadFormUsesATextInputForTheURL(t *testing.T) {
+	server := newTestServer(t, &fakeSources{}, &fakeProfiles{}, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/downloads/new", nil))
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="url"`) {
+		t.Error("form is missing the url field")
+	}
+	if strings.Contains(body, `type="url"`) {
+		t.Error(`url field must not use type="url"; the browser would block links without a scheme`)
+	}
+	if !strings.Contains(body, `inputmode="url"`) {
+		t.Error(`url field should keep inputmode="url"`)
+	}
+}
