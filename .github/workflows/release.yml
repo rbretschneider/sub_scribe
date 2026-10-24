@@ -66,3 +66,8 @@ jobs:
           # yt-dlp, ffmpeg, and the Python toolchain every time.
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # A manual run is a security rebuild: skip the cache and re-pull the
+          # base so `apk add` picks up patched packages (e.g. nodejs) even when
+          # alpine:3.22 itself has not been republished.
+          no-cache: ${{ github.event_name == 'workflow_dispatch' }}
+          pull: ${{ github.event_name == 'workflow_dispatch' }}
