@@ -547,3 +547,43 @@ func uploadDatePtr(t time.Time) *time.Time {
 	}
 	return &t
 }
+
+// DescriptionsByUploader returns the non-empty stored descriptions of every item
+// whose uploader is exactly the given name, across all sources and statuses. The
+// description-cleanup feature reads it as a channel's history: which paragraphs
+// the channel pastes into most of its videos. There is deliberately no source
+// filter, so a playlist or one-off item sees its own channel's full history.
+func (r *MediaRepo) DescriptionsByUploader(ctx context.Context, uploader string) ([]string, error) {
+	rows, err := r.sql.QueryContext(ctx,
+		`SELECT description FROM media WHERE uploader = ? AND description <> '' ORDER BY id ASC`,
+		uploader)
+	if err != nil {
+		return nil, fmt.Errorf("store: descriptions by uploader: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, fmt.Errorf("store: descriptions by uploader: %w", err)
+		}
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: descriptions by uploader: %w", err)
+	}
+	return out, nil
+}
+
+// CountDescriptionsByUploader counts what DescriptionsByUploader would return,
+// using the partial index on (uploader) for non-empty descriptions.
+func (r *MediaRepo) CountDescriptionsByUploader(ctx context.Context, uploader string) (int, error) {
+	var n int
+	if err := r.sql.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM media WHERE uploader = ? AND description <> ''`,
+		uploader).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: count descriptions by uploader: %w", err)
+	}
+	return n, nil
+}

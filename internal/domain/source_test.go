@@ -76,3 +76,36 @@ func TestSourceIsDueForIndex(t *testing.T) {
 		})
 	}
 }
+
+func TestDescriptionCleanup(t *testing.T) {
+	tests := []struct {
+		mode          DescriptionCleanup
+		wantValid     bool
+		wantEffective DescriptionCleanup
+		wantCleans    bool
+	}{
+		{DescriptionCleanupOff, true, DescriptionCleanupOff, false},
+		{DescriptionCleanupOn, true, DescriptionCleanupOn, true},
+		{"", false, DescriptionCleanupOff, false},
+		{"maybe", false, "maybe", false},
+	}
+	for _, tc := range tests {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			if got := tc.mode.IsValid(); got != tc.wantValid {
+				t.Errorf("IsValid() = %v, want %v", got, tc.wantValid)
+			}
+			if got := tc.mode.Effective(); got != tc.wantEffective {
+				t.Errorf("Effective() = %q, want %q", got, tc.wantEffective)
+			}
+			if got := (Source{DescriptionCleanup: tc.mode}).CleansDescriptions(); got != tc.wantCleans {
+				t.Errorf("CleansDescriptions() = %v, want %v", got, tc.wantCleans)
+			}
+		})
+	}
+}
+
+func TestSourceZeroValueCleansNothing(t *testing.T) {
+	if (Source{}).CleansDescriptions() {
+		t.Error("a source without the field set must behave as cleanup off")
+	}
+}

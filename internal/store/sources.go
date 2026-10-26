@@ -24,7 +24,8 @@ type SourceRepo struct {
 const sourceColumns = `id, name, url, collection_type, media_profile_id, enabled,
 	index_frequency_seconds, last_indexed_at, cookie_behavior, download_cutoff,
 	title_filter_pattern, shorts_rule, livestreams_rule, retention_after_seconds,
-	cutoff_window_seconds, feed_token, created_at, updated_at`
+	cutoff_window_seconds, description_cleanup, description_strip_patterns,
+	feed_token, created_at, updated_at`
 
 // toDurationSeconds converts a duration to the whole-seconds integer stored in
 // the *_seconds columns.
@@ -39,18 +40,24 @@ func fromDurationSeconds(secs int64) time.Duration {
 
 // Create inserts a new source and returns its assigned id.
 func (r *SourceRepo) Create(ctx context.Context, source domain.Source) (int64, error) {
+	patterns, err := marshalJSONList(source.DescriptionStripPatterns)
+	if err != nil {
+		return 0, fmt.Errorf("store: create source: %w", err)
+	}
 	res, err := r.sql.ExecContext(ctx,
 		`INSERT INTO sources(name, url, collection_type, media_profile_id, enabled,
 			index_frequency_seconds, last_indexed_at, cookie_behavior, download_cutoff,
 			title_filter_pattern, shorts_rule, livestreams_rule, retention_after_seconds,
-			cutoff_window_seconds, feed_token, created_at, updated_at)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			cutoff_window_seconds, description_cleanup, description_strip_patterns,
+			feed_token, created_at, updated_at)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		source.Name, source.URL, source.CollectionType, source.MediaProfileID,
 		boolToInt(source.Enabled), toDurationSeconds(source.IndexFrequency),
 		toNullUnix(source.LastIndexedAt), source.CookieBehavior,
 		toNullUnix(source.DownloadCutoff), source.TitleFilterPattern,
 		source.ShortsRule, source.LivestreamsRule,
 		toDurationSeconds(source.RetentionAfter), toDurationSeconds(source.CutoffWindow),
+		source.DescriptionCleanup.Effective(), patterns,
 		source.FeedToken, source.CreatedAt.Unix(), source.UpdatedAt.Unix(),
 	)
 	if err != nil {
@@ -101,11 +108,16 @@ func (r *SourceRepo) List(ctx context.Context) ([]domain.Source, error) {
 // deliberately not among them: it is assigned at creation and rotating it on
 // edit would break every podcast app subscribed to the tokenized feed URL.
 func (r *SourceRepo) Update(ctx context.Context, source domain.Source) error {
+	patterns, err := marshalJSONList(source.DescriptionStripPatterns)
+	if err != nil {
+		return fmt.Errorf("store: update source %d: %w", source.ID, err)
+	}
 	if _, err := r.sql.ExecContext(ctx,
 		`UPDATE sources SET name = ?, url = ?, collection_type = ?, media_profile_id = ?,
 			enabled = ?, index_frequency_seconds = ?, last_indexed_at = ?, cookie_behavior = ?,
 			download_cutoff = ?, title_filter_pattern = ?, shorts_rule = ?, livestreams_rule = ?,
-			retention_after_seconds = ?, cutoff_window_seconds = ?, updated_at = ?
+			retention_after_seconds = ?, cutoff_window_seconds = ?,
+			description_cleanup = ?, description_strip_patterns = ?, updated_at = ?
 		 WHERE id = ?`,
 		source.Name, source.URL, source.CollectionType, source.MediaProfileID,
 		boolToInt(source.Enabled), toDurationSeconds(source.IndexFrequency),
@@ -113,6 +125,7 @@ func (r *SourceRepo) Update(ctx context.Context, source domain.Source) error {
 		toNullUnix(source.DownloadCutoff), source.TitleFilterPattern,
 		source.ShortsRule, source.LivestreamsRule,
 		toDurationSeconds(source.RetentionAfter), toDurationSeconds(source.CutoffWindow),
+		source.DescriptionCleanup.Effective(), patterns,
 		source.UpdatedAt.Unix(),
 		source.ID,
 	); err != nil {
@@ -182,15 +195,23 @@ func scanSource(row rowScanner) (domain.Source, error) {
 		cutoffWindow                  int64
 		lastIndexed, downloadCutoff   sql.NullInt64
 		createdAt, updatedAt          int64
+		patterns                      string
 	)
 	if err := row.Scan(
 		&source.ID, &source.Name, &source.URL, &source.CollectionType,
 		&source.MediaProfileID, &enabled, &indexFreq, &lastIndexed,
 		&source.CookieBehavior, &downloadCutoff, &source.TitleFilterPattern,
 		&source.ShortsRule, &source.LivestreamsRule, &retention,
-		&cutoffWindow, &source.FeedToken, &createdAt, &updatedAt,
+		&cutoffWindow, &source.DescriptionCleanup, &patterns, &source.FeedToken, &createdAt, &updatedAt,
 	); err != nil {
 		return domain.Source{}, err
+	}
+	// The list is not validated here: patterns read back from the database are
+	// re-checked by the cleaner before they are ever compiled. A malformed value
+	// (a hand-edited database) reads as no patterns rather than making every
+	// source unreadable.
+	if stripPatterns, err := unmarshalJSONList[string](patterns); err == nil && len(stripPatterns) > 0 {
+		source.DescriptionStripPatterns = stripPatterns
 	}
 	source.Enabled = enabled != 0
 	source.IndexFrequency = fromDurationSeconds(indexFreq)
