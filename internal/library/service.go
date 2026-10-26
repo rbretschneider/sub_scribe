@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"sub_scribe/internal/descclean"
 	"sub_scribe/internal/domain"
 	"sub_scribe/internal/events"
 	"sub_scribe/internal/jobs"
@@ -62,6 +63,17 @@ type Deps struct {
 	// JobRetention is how long finished queue entries are kept. Zero keeps them
 	// forever.
 	JobRetention time.Duration
+
+	// Cleaner applies description cleanup. Nil means no cleanup anywhere, whatever
+	// a source's setting says.
+	Cleaner *descclean.Cleaner
+	// History supplies a channel's stored descriptions to the repetition layer.
+	// Nil switches that layer off; the other layers still run.
+	History ChannelHistory
+	// BatchBudget and PreviewBudget bound cleaning time for one batch of writes
+	// and for one detail-page preview. Zero uses the defaults.
+	BatchBudget   time.Duration
+	PreviewBudget time.Duration
 }
 
 // Service is sub_scribe's application core. It coordinates repositories, yt-dlp,
@@ -150,6 +162,9 @@ func (s *Service) UpdateSource(ctx context.Context, id int64, input AddSourceInp
 	if err := s.deps.Sources.Update(ctx, source); err != nil {
 		return domain.Source{}, fmt.Errorf("update source: %w", err)
 	}
+	if descriptionSettingsChanged(existing, source) {
+		s.requestSidecarRefresh(ctx, source.ID)
+	}
 	return source, nil
 }
 
@@ -229,8 +244,12 @@ func sourceFromInput(input AddSourceInput, now time.Time) domain.Source {
 		ShortsRule:         input.ShortsRule,
 		LivestreamsRule:    input.LivestreamsRule,
 		RetentionAfter:     input.RetentionAfter,
-		CreatedAt:          now,
-		UpdatedAt:          now,
+
+		DescriptionCleanup:       input.DescriptionCleanup,
+		DescriptionStripPatterns: input.DescriptionStripPatterns,
+
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 }
 
@@ -270,6 +289,22 @@ func (s *Service) normalizeAndValidate(ctx context.Context, input AddSourceInput
 		if _, err := regexp.Compile(input.TitleFilterPattern); err != nil {
 			return input, fmt.Errorf("invalid title filter pattern: %w", err)
 		}
+	}
+	if input.DescriptionCleanup == "" {
+		input.DescriptionCleanup = domain.DescriptionCleanupOff
+	}
+	if !input.DescriptionCleanup.IsValid() {
+		return input, fmt.Errorf("invalid description cleanup %q", input.DescriptionCleanup)
+	}
+	// Re-checked here as well as in the form so every caller gets the same limits;
+	// the stored list is the normalised one.
+	patterns, err := descclean.ParsePatterns(input.DescriptionStripPatterns)
+	if err != nil {
+		return input, fmt.Errorf("description strip patterns: %w", err)
+	}
+	input.DescriptionStripPatterns = descclean.Sources(patterns)
+	if len(input.DescriptionStripPatterns) == 0 {
+		input.DescriptionStripPatterns = nil
 	}
 	if _, err := s.deps.Profiles.Get(ctx, input.MediaProfileID); err != nil {
 		return input, fmt.Errorf("media profile: %w", err)
@@ -622,6 +657,9 @@ func (s *Service) recordIndexedEntries(ctx context.Context, source domain.Source
 	if err != nil {
 		return requeued, fmt.Errorf("record indexed media: %w", err)
 	}
+	for _, m := range fresh {
+		s.invalidateChannel(m.Metadata.Uploader)
+	}
 	tasks := make([]jobs.Task, 0, len(ids))
 	for _, id := range ids {
 		tasks = append(tasks, jobs.NewTask(jobs.TaskDownloadMedia, now).ForMedia(id))
@@ -852,6 +890,7 @@ func (s *Service) ensureMetadata(ctx context.Context, source domain.Source, medi
 	if _, err := s.deps.Media.Upsert(ctx, media); err != nil {
 		return media, fmt.Errorf("persist refreshed metadata: %w", err)
 	}
+	s.invalidateChannel(media.Metadata.Uploader)
 	return media, nil
 }
 
@@ -1036,7 +1075,8 @@ func (s *Service) recordDownloadFailure(ctx context.Context, mediaID int64, medi
 // successful download: sidecar metadata, feed regeneration, and notification.
 // Failures here are logged but do not fail the download, which already succeeded.
 func (s *Service) finalizeDownload(ctx context.Context, source domain.Source, media domain.Media, filePath string, profile domain.MediaProfile) {
-	if _, err := s.deps.Metadata.WriteFor(ctx, filePath, media, source.Name, profile.MetadataFormat); err != nil {
+	// forOutput hands the writers a copy; the stored description is never changed.
+	if _, err := s.deps.Metadata.WriteFor(ctx, filePath, s.forOutput(ctx, source, media, nil), source.Name, profile.MetadataFormat); err != nil {
 		log.Printf("library: write metadata for %q: %v", filePath, err)
 	}
 	s.writeShowSidecars(ctx, source, filePath, profile)
@@ -1044,7 +1084,7 @@ func (s *Service) finalizeDownload(ctx context.Context, source domain.Source, me
 	items, err := s.deps.Media.ListBySource(ctx, source.ID)
 	if err != nil {
 		log.Printf("library: list media for feed regen (source %d): %v", source.ID, err)
-	} else if err := s.deps.Feed.WriteFeed(ctx, source, items); err != nil {
+	} else if err := s.deps.Feed.WriteFeed(ctx, source, s.forOutputBatch(ctx, source, items, nil)); err != nil {
 		log.Printf("library: write feed for source %d: %v", source.ID, err)
 	}
 

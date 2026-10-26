@@ -30,6 +30,9 @@ const (
 	// template currently describes, for a library left split across two layouts
 	// by a template change.
 	TaskRenameFiles TaskType = "rename_files"
+	// TaskRefreshSidecars rewrites a source's metadata files and feed from its
+	// current settings, for a settings change that alters what they contain.
+	TaskRefreshSidecars TaskType = "refresh_sidecars"
 )
 
 // TaskStatus is the lifecycle state of a queued task.

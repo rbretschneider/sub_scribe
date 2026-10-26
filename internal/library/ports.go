@@ -75,6 +75,17 @@ type MediaRepo interface {
 	StatsBySource(ctx context.Context) (map[int64]SourceStats, error)
 }
 
+// ChannelHistory reads the stored descriptions of one channel (uploader) across
+// the whole library, which is what the repetition layer of description cleanup
+// judges a paragraph against. Both methods count only non-empty descriptions and
+// ignore which source owns them. It is a separate interface, optional in Deps, so
+// existing MediaRepo fakes keep compiling; without it the repetition layer is off.
+// Implemented by the store's media repo.
+type ChannelHistory interface {
+	DescriptionsByUploader(ctx context.Context, uploader string) ([]string, error)
+	CountDescriptionsByUploader(ctx context.Context, uploader string) (int, error)
+}
+
 // ProfileRepo persists media profiles (the how/where of downloading).
 type ProfileRepo interface {
 	Create(ctx context.Context, profile domain.MediaProfile) (int64, error)
