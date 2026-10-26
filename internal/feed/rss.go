@@ -48,6 +48,9 @@ type item struct {
 	GUID      guid      `xml:"guid"`
 	PubDate   string    `xml:"pubDate"`
 	Enclosure enclosure `xml:"enclosure"`
+	// Description is only filled for sources with description cleanup on, so a
+	// feed with cleanup off is byte-for-byte what it was before the field existed.
+	Description string `xml:"description,omitempty"`
 }
 
 // guid is the item's globally unique id; isPermaLink=false marks it opaque.
@@ -78,7 +81,7 @@ func BuildRSS(source domain.Source, items []domain.Media) ([]byte, error) {
 		Channel: channel{Title: source.Name, Items: make([]item, 0, len(downloaded))},
 	}
 	for _, m := range downloaded {
-		doc.Channel.Items = append(doc.Channel.Items, toItem(m))
+		doc.Channel.Items = append(doc.Channel.Items, toItem(m, source.CleansDescriptions()))
 	}
 
 	out, err := xml.MarshalIndent(doc, "", "  ")
@@ -100,8 +103,8 @@ func filterDownloaded(items []domain.Media) []domain.Media {
 }
 
 // toItem maps a downloaded media record onto an RSS <item>.
-func toItem(m domain.Media) item {
-	return item{
+func toItem(m domain.Media, withDescription bool) item {
+	it := item{
 		Title:   m.Metadata.Title,
 		GUID:    guid{IsPermaLink: false, Value: m.ExternalID},
 		PubDate: m.Metadata.UploadDate.Format(pubDateLayout),
@@ -111,6 +114,10 @@ func toItem(m domain.Media) item {
 			Type:   mimeForPath(m.FilePath),
 		},
 	}
+	if withDescription {
+		it.Description = m.Metadata.Description
+	}
+	return it
 }
 
 // mimeForPath infers an enclosure MIME type from a file's extension, falling back
