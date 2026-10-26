@@ -113,6 +113,9 @@
   <dt>Retention</dt>
   <dd>Delete after {{daysOf .Source.RetentionAfter}} days</dd>
   {{end}}
+
+  <dt>Description cleanup</dt>
+  <dd>{{if eq (printf "%s" .Source.DescriptionCleanup) "on"}}On{{else}}Off{{end}}{{if .Source.DescriptionStripPatterns}} ({{len .Source.DescriptionStripPatterns}} custom pattern{{if ne (len .Source.DescriptionStripPatterns) 1}}s{{end}}){{end}}</dd>
 </dl>
 
 <div class="panel table-wrap">

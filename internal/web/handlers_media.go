@@ -1,6 +1,7 @@
 package web
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,6 +21,8 @@ type mediaDetailView struct {
 	// CanRetry is false while the item is already queued or in flight, so the
 	// button is not offered when it would do nothing.
 	CanRetry bool
+	// Preview is nil when the panel should not be shown.
+	Preview *library.DescriptionPreview
 }
 
 // handleMediaDetail renders everything known about one item, including the full
@@ -46,7 +49,25 @@ func (s *Server) handleMediaDetail(w http.ResponseWriter, r *http.Request) {
 		WatchURL: watchURLFor(item.Media.ExternalID),
 		CanRetry: canRetryMedia(item.Media.Status),
 	}
+	view.Preview = s.descriptionPreview(r, id)
 	s.render(w, "media_detail", http.StatusOK, view)
+}
+
+// descriptionPreview loads the cleaned-description panel. A failure only hides
+// the panel: the page must render whatever happens to the preview.
+func (s *Server) descriptionPreview(r *http.Request, id int64) *library.DescriptionPreview {
+	if s.deps.Preview == nil {
+		return nil
+	}
+	preview, err := s.deps.Preview.PreviewDescription(r.Context(), id)
+	if err != nil {
+		slog.WarnContext(r.Context(), "could not build the description preview", "media_id", id)
+		return nil
+	}
+	if !preview.Available {
+		return nil
+	}
+	return &preview
 }
 
 // handleMediaRetry requeues one item and returns to its detail page.

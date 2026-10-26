@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"sub_scribe/internal/descclean"
 	"sub_scribe/internal/domain"
 	"sub_scribe/internal/library"
 )
@@ -27,6 +28,9 @@ const (
 	fieldLivestreamsRule = "livestreams_rule"
 	fieldRetentionDays   = "retention_days"
 	fieldRetentionPreset = "retention_preset"
+
+	fieldDescriptionCleanup = "description_cleanup"
+	fieldStripPatterns      = "description_strip_patterns"
 )
 
 // hoursPerDayDuration converts a whole-day count into a duration.
@@ -51,6 +55,10 @@ type sourceFormValues struct {
 	// RetentionDays, or empty to keep everything.
 	RetentionPreset string
 	RetentionDays   string
+	// DescriptionCleanup is "off" or "on"; StripPatterns is the textarea, one
+	// pattern per line.
+	DescriptionCleanup string
+	StripPatterns      string
 }
 
 // fromSource maps a persisted source back onto raw form values so the edit form
@@ -71,6 +79,9 @@ func fromSource(source domain.Source) sourceFormValues {
 		LivestreamsRule: string(source.LivestreamsRule),
 		RetentionPreset: retentionPresetValue(source.RetentionAfter),
 		RetentionDays:   optionalDaysString(source.RetentionAfter),
+
+		DescriptionCleanup: string(source.DescriptionCleanup.Effective()),
+		StripPatterns:      strings.Join(source.DescriptionStripPatterns, "\n"),
 	}
 }
 
@@ -139,6 +150,9 @@ func readFormValues(r *http.Request) sourceFormValues {
 		LivestreamsRule: r.PostFormValue(fieldLivestreamsRule),
 		RetentionPreset: r.PostFormValue(fieldRetentionPreset),
 		RetentionDays:   r.PostFormValue(fieldRetentionDays),
+
+		DescriptionCleanup: r.PostFormValue(fieldDescriptionCleanup),
+		StripPatterns:      r.PostFormValue(fieldStripPatterns),
 	}
 }
 
@@ -158,6 +172,8 @@ func (v sourceFormValues) toInput() (library.AddSourceInput, error) {
 	builder.setShortsRule(v.ShortsRule)
 	builder.setLivestreamsRule(v.LivestreamsRule)
 	builder.setRetention(v.RetentionPreset, v.RetentionDays)
+	builder.setDescriptionCleanup(v.DescriptionCleanup)
+	builder.setStripPatterns(v.StripPatterns)
 	return builder.input, builder.err
 }
 
@@ -342,4 +358,60 @@ func (b *inputBuilder) setRetention(preset, days string) {
 		return
 	}
 	b.input.RetentionAfter = time.Duration(parsed) * hoursPerDayDuration
+}
+
+// setDescriptionCleanup reads the Off/On choice. A missing value means off, so
+// older forms and scripted posts keep the default.
+func (b *inputBuilder) setDescriptionCleanup(value string) {
+	if b.err != nil {
+		return
+	}
+	mode := domain.DescriptionCleanup(strings.TrimSpace(value))
+	if mode == "" {
+		mode = domain.DescriptionCleanupOff
+	}
+	if !mode.IsValid() {
+		b.err = errors.New("Please choose whether to clean descriptions.")
+		return
+	}
+	b.input.DescriptionCleanup = mode
+}
+
+// setStripPatterns validates the strip patterns, one per line. Patterns may be
+// saved while cleanup is off: the preview uses them and turning cleanup on later
+// applies them. A problem is reported without echoing more than a short excerpt.
+func (b *inputBuilder) setStripPatterns(value string) {
+	if b.err != nil {
+		return
+	}
+	lines := strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n")
+	patterns, err := descclean.ParsePatterns(lines)
+	if err != nil {
+		b.err = errors.New(stripPatternMessage(err))
+		return
+	}
+	if len(patterns) > 0 {
+		b.input.DescriptionStripPatterns = descclean.Sources(patterns)
+	}
+}
+
+// stripPatternMessage turns a pattern validation error into advice a user can act on.
+func stripPatternMessage(err error) string {
+	var pe *descclean.PatternError
+	excerpt := ""
+	if errors.As(err, &pe) && pe.Excerpt != "" {
+		excerpt = " (" + pe.Excerpt + ")"
+	}
+	switch {
+	case errors.Is(err, descclean.ErrTooMany):
+		return "Please use at most 20 description patterns."
+	case errors.Is(err, descclean.ErrTooLong):
+		return "A description pattern is longer than 500 characters" + excerpt + "."
+	case errors.Is(err, descclean.ErrTooComplexTogether):
+		return "The description patterns are too complex together. Remove or simplify some patterns."
+	case errors.Is(err, descclean.ErrTooComplex):
+		return "That pattern repeats something more than 100 times or is too complex" + excerpt + ". Simplify it."
+	default:
+		return "That description pattern isn't valid" + excerpt + ". Use a Go regular expression, one per line."
+	}
 }

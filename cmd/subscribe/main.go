@@ -300,6 +300,7 @@ func buildHTTPHandler(cfg config.Config, deps webDeps) (http.Handler, error) {
 		Profiles:    deps.svc,
 		Library:     deps.svc,
 		Media:       deps.svc,
+		Preview:     deps.svc,
 		Jobs:        deps.tasks,
 		Queue:       deps.tasks,
 		Logs:        deps.logs,
