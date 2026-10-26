@@ -74,7 +74,8 @@ Everything for v1 is built, tested, and was **verified on the running binary**:
 - **Downloading**: `yt-dlp` wrapper builds args (format/audio, embeds,
   SponsorBlock, cookies, PO-token), streams progress, captures final path.
 - **Media-server output**: cross-platform-safe naming templates, `.nfo` metadata
-  sidecars (Kodi/Jellyfin), RSS/podcast feeds per source.
+  sidecars (Kodi/Jellyfin), RSS/podcast feeds per source, and optional per-source
+  description cleanup (off by default).
 - **Extras**: Apprise notifications (opt-in), SponsorBlock, retention auto-delete,
   live SSE UI updates, optional PO-token provider (see §7).
 
@@ -202,6 +203,12 @@ docker compose up -d
 - **Media upsert dedup**: `MediaRepo.Upsert` dedupes on `(source_id, external_id)`
   and refreshes metadata columns only — it never clobbers `status`/`file_path`/
   `downloaded_at`. Re-indexing is safe.
+- **Description cleanup works on a copy**: `library.forOutput` cleans a local copy
+  of a media value for the sidecar and feed writers. Never pass that copy to a
+  repository method, or the stored original is overwritten and turning cleanup off
+  can no longer restore it. Code that changes stored descriptions must call
+  `invalidateChannel` for the uploader. Bump `algorithmVersion` in `descclean`
+  whenever the built-in phrase lists or rules change, so cached results are not reused.
 - **SQLite single writer**: `store.Open` sets `MaxOpenConns(1)` + WAL +
   `busy_timeout`. Intentional: writes are tiny; avoids "database is locked". Don't
   raise it without load-testing.
@@ -243,8 +250,8 @@ Ordered roughly by value:
    surfaced in the UI, but nothing schedules a redownload yet. Wire a scheduler/
    task path if desired.
 6. **`TaskGenerateFeed`**: the task type exists but isn't registered (feeds are
-   regenerated inline after each download). Register a handler only if you want
-   standalone feed rebuilds.
+   regenerated inline after each download, and by the `refresh_sidecars` task and
+   the startup pass). Register a handler only if you want standalone feed rebuilds.
 7. **Verify real yt-dlp path end-to-end**: all runtime tests mock the subprocess.
    Worth one manual run inside the container against a real channel to confirm the
    `--print after_move:filepath` capture and progress parsing against current

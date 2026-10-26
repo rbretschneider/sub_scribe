@@ -150,7 +150,9 @@ Nothing to configure. They read `.nfo` sidecars natively.
 Every source is also a podcast: subscribe to
 `http://<host>:<port>/feeds/<source id>` in any podcast app and each archived
 video arrives as an episode. The exact address is shown on the source's page,
-and the feed appears after the source's first download. An **audio-only media
+and the feed appears after the source's first download. A source with description
+cleanup on can get an empty feed file sooner, at startup or after a settings
+change, and it lists no episodes until a download finishes. An **audio-only media
 profile** turns a channel into a true listening feed.
 
 If you've enabled a login (basic auth or SSO), the feeds sit behind it too.
@@ -173,17 +175,21 @@ from what is written, by three layers:
 1. **Repeated in the channel.** A paragraph is removed when, ignoring letter
    case and spacing, it appears in at least half of the stored descriptions from
    the same channel (uploader), and at least 5 descriptions from that channel are
-   stored. It is counted across the whole library, not per source, and is based
-   on videos already downloaded (or fetched in full), so a young archive has less
-   to go on.
+   stored. It is counted across the whole library, not per source, and includes
+   every stored description from that channel, downloaded or not. Only descriptions
+   that yt-dlp reported and sub_scribe stored are counted, so a young archive has
+   less to go on.
 2. **Sponsor rule (English only).** A paragraph is removed when it holds both a
    sponsor phrase ("sponsored by", "brought to you by", "#ad", ...) and a link or
    a promo phrase ("use code", "% off", ...). A paragraph with only one is kept.
 3. **Your patterns.** Under **Remove paragraphs matching**, add Go regular
    expressions, one per line; a paragraph matching any is removed. Matching
    ignores letter case unless the pattern starts with `(?-i)`. Limits: at most 20
-   patterns, each at most 500 characters, repeat counts up to 100, and an overall
+   patterns, each at most 500 bytes, repeat counts up to 100, and an overall
    complexity cap. A pattern that breaks a limit is refused with a message.
+
+When more than one layer matches a paragraph, its label names the first that
+applies, in this order: your pattern, repetition, then the sponsor rule.
 
 Chapter lists (lines starting with a time such as `0:00`) are never removed by
 layers 1 and 2. If every paragraph would be removed, the original description is
@@ -293,11 +299,12 @@ re-adopted, so upgrading never loses your archive.
 turns this off), so when YouTube changes something and downloads start failing,
 restarting the container is usually the whole fix — no new image required.
 
-Metadata sidecars are also brought up to date in the background on every start,
-so an archive downloaded by an older version gets whatever the current one
-writes without being re-downloaded. Files are only rewritten when their content
-would actually change. When that happens, tell your media server to refresh its
-metadata — it has no reason to re-read a file it already scanned. Watch for:
+Metadata sidecars and podcast feeds are also brought up to date in the background
+on every start, so an archive downloaded by an older version gets whatever the
+current one writes without being re-downloaded. Files are only rewritten when
+their content would actually change. When that happens, tell your media server to
+refresh its metadata — it has no reason to re-read a file it already scanned. Watch
+for:
 
 ```
 INFO brought metadata sidecars up to date files=11
@@ -583,6 +590,8 @@ internal/cookies     cookie parsing + login health/expiry assessment
 internal/metadata    Kodi/Jellyfin .nfo writer
 internal/artwork     channel poster/backdrop/season art writer
 internal/feed        RSS/podcast feed generation
+internal/descclean   description cleanup at output time (pure, standard library only)
+internal/fsutil      atomic file writes for sidecars and feeds
 internal/sponsorblock, internal/notify, internal/events, internal/config, internal/web
 ```
 
