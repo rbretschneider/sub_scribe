@@ -193,4 +193,55 @@ type AddSourceInput struct {
 	ShortsRule         domain.InclusionRule
 	LivestreamsRule    domain.InclusionRule
 	RetentionAfter     time.Duration
+
+	// DescriptionCleanup is "off" or "on"; empty means off.
+	DescriptionCleanup domain.DescriptionCleanup
+	// DescriptionStripPatterns are the user's regular expressions, validated and
+	// normalised by the service before they are stored.
+	DescriptionStripPatterns []string
+}
+
+// SidecarRefresher rewrites one source's metadata files and feed from the
+// current settings, without touching media. Invoked by the refresh task handler.
+type SidecarRefresher interface {
+	// RefreshSourceSidecars returns how many metadata files changed.
+	RefreshSourceSidecars(ctx context.Context, sourceID int64) (int, error)
+}
+
+// RemovedParagraph is one paragraph description cleanup removes, for display.
+type RemovedParagraph struct {
+	Text string
+	// Reason is the machine code: repeated, sponsor or user_pattern.
+	Reason string
+	// Label is the human-readable reason, including its specifics.
+	Label string
+}
+
+// DescriptionPreview is what cleanup would do to one item's description, shown on
+// the detail page whether or not the source has cleanup switched on.
+type DescriptionPreview struct {
+	// Available is false when there is nothing to show (no description, or
+	// cleanup is not configured); the page then omits the panel.
+	Available bool
+	// Enabled mirrors the source setting: true means this is what is written.
+	Enabled bool
+	// Unavailable is set when the preview could not be computed in time.
+	Unavailable       bool
+	UnavailableReason string
+
+	Original string
+	Cleaned  string
+	// FellBack is set when every paragraph matched, so the original is kept.
+	FellBack bool
+	Removed  []RemovedParagraph
+	// HistorySize is how many stored channel descriptions repetition used.
+	HistorySize int
+	// PatternsIgnored is set when the source's stored patterns failed validation.
+	PatternsIgnored bool
+	SourceID        int64
+}
+
+// DescriptionPreviewer builds a description preview for one media item.
+type DescriptionPreviewer interface {
+	PreviewDescription(ctx context.Context, mediaID int64) (DescriptionPreview, error)
 }

@@ -24,6 +24,8 @@ type Deps struct {
 	Redownloader library.Redownloader
 	JobPruner    library.JobPruner
 	Renamer      library.Renamer
+	// SidecarRefresher rewrites a source's metadata files and feed.
+	SidecarRefresher library.SidecarRefresher
 }
 
 // IndexHandler returns a handler that indexes the task's source. The task must
@@ -96,6 +98,26 @@ func RenameHandler(renamer library.Renamer) jobs.HandlerFunc {
 			"source_id", *task.SourceID,
 			"checked", report.Checked, "renamed", report.Renamed, "blocked", report.Blocked,
 			"orphans_removed", report.OrphansRemoved)
+		return nil
+	}
+}
+
+// RefreshSidecarsHandler returns a handler that rewrites the task's source
+// metadata files and feed from its current settings. The task must carry a
+// SourceID.
+func RefreshSidecarsHandler(refresher library.SidecarRefresher) jobs.HandlerFunc {
+	return func(ctx context.Context, task jobs.Task) error {
+		if task.SourceID == nil {
+			return fmt.Errorf("refresh sidecars task %d: missing source id", task.ID)
+		}
+		changed, err := refresher.RefreshSourceSidecars(ctx, *task.SourceID)
+		if err != nil {
+			return err
+		}
+		if changed > 0 {
+			slog.InfoContext(ctx, "refreshed metadata files after a settings change",
+				"source_id", *task.SourceID, "changed", changed)
+		}
 		return nil
 	}
 }

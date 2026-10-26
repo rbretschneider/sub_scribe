@@ -76,9 +76,12 @@ type ServerDeps struct {
 	Library  library.LibraryReader
 	// Jobs and Queue back the queue screens: Jobs reads what is running, queued,
 	// and failed; Queue is only used by the retry action.
-	Jobs        library.JobReader
-	Queue       library.QueueMaintain
-	Media       library.MediaService
+	Jobs  library.JobReader
+	Queue library.QueueMaintain
+	Media library.MediaService
+	// Preview, when set, adds the cleaned-description panel to the video page.
+	// Nil hides it.
+	Preview     library.DescriptionPreviewer
 	Logs        LogReader
 	CookiesPath string
 	// FeedDir is where the feed writer puts each source's podcast RSS file,

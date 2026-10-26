@@ -1,12 +1,14 @@
 package feed
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"sub_scribe/internal/domain"
+	"sub_scribe/internal/fsutil"
 	"sub_scribe/internal/library"
 )
 
@@ -32,7 +34,9 @@ func NewWriter(feedDir string) *Writer {
 }
 
 // WriteFeed builds the source's RSS feed and writes it to
-// feedDir/<source.ID>.xml, creating feedDir if necessary.
+// feedDir/<source.ID>.xml, creating feedDir if necessary. The file is left alone
+// when it already holds these bytes, and otherwise replaced atomically so a
+// podcast app fetching mid-write never sees a truncated feed.
 func (w *Writer) WriteFeed(ctx context.Context, source domain.Source, items []domain.Media) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -45,7 +49,10 @@ func (w *Writer) WriteFeed(ctx context.Context, source domain.Source, items []do
 		return fmt.Errorf("create feed dir %q: %w", w.feedDir, err)
 	}
 	path := filepath.Join(w.feedDir, fmt.Sprintf("%d.xml", source.ID))
-	if err := os.WriteFile(path, data, feedFilePerm); err != nil {
+	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, data) {
+		return nil
+	}
+	if err := fsutil.WriteFileAtomic(path, data, feedFilePerm); err != nil {
 		return fmt.Errorf("write feed %q: %w", path, err)
 	}
 	return nil

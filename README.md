@@ -150,7 +150,9 @@ Nothing to configure. They read `.nfo` sidecars natively.
 Every source is also a podcast: subscribe to
 `http://<host>:<port>/feeds/<source id>` in any podcast app and each archived
 video arrives as an episode. The exact address is shown on the source's page,
-and the feed appears after the source's first download. An **audio-only media
+and the feed appears after the source's first download. A source with description
+cleanup on can get an empty feed file sooner, at startup or after a settings
+change, and it lists no episodes until a download finishes. An **audio-only media
 profile** turns a channel into a true listening feed.
 
 If you've enabled a login (basic auth or SSO), the feeds sit behind it too.
@@ -158,6 +160,53 @@ Each source's page shows a **tokenized feed URL** (`/feeds/<id>?t=<token>`)
 that authorizes the feed on its own — podcast apps can't complete a browser
 login, so the address is the key. Treat it like a password. Basic-auth
 credentials (`http://user:pass@host` form) keep working as well.
+
+### Cleaning up descriptions
+
+YouTube descriptions often carry text that has nothing to do with the video:
+sponsor reads with promo codes, merch and social links, a disclaimer pasted on
+every upload. Each source has a **Clean up descriptions** setting, **Off by
+default**. With it Off, the episode `.nfo` plot and the podcast feed are exactly
+what they were before.
+
+With it **On**, whole paragraphs (text separated by a blank line) are removed
+from what is written, by three layers:
+
+1. **Repeated in the channel.** A paragraph is removed when, ignoring letter
+   case and spacing, it appears in at least half of the stored descriptions from
+   the same channel (uploader), and at least 5 descriptions from that channel are
+   stored. It is counted across the whole library, not per source, and includes
+   every stored description from that channel, downloaded or not. Only descriptions
+   that yt-dlp reported and sub_scribe stored are counted, so a young archive has
+   less to go on.
+2. **Sponsor rule (English only).** A paragraph is removed when it holds both a
+   sponsor phrase ("sponsored by", "brought to you by", "#ad", ...) and a link or
+   a promo phrase ("use code", "% off", ...). A paragraph with only one is kept.
+3. **Your patterns.** Under **Remove paragraphs matching**, add Go regular
+   expressions, one per line; a paragraph matching any is removed. Matching
+   ignores letter case unless the pattern starts with `(?-i)`. Limits: at most 20
+   patterns, each at most 500 bytes, repeat counts up to 100, and an overall
+   complexity cap. A pattern that breaks a limit is refused with a message.
+
+When more than one layer matches a paragraph, its label names the first that
+applies, in this order: your pattern, repetition, then the sponsor rule.
+
+Chapter lists (lines starting with a time such as `0:00`) are never removed by
+layers 1 and 2. If every paragraph would be removed, the original description is
+kept. The original is always stored unchanged, so turning cleanup Off restores it
+everywhere. Only the `.nfo` plot and, for sources with cleanup On, a new
+`<description>` on each feed item change; descriptions embedded in the media
+files are untouched. The video's page shows the cleaned text and each removed
+paragraph with its reason, even for sources where cleanup is Off.
+
+Changing the setting or the patterns queues a background job that rewrites the
+affected `.nfo` files and the feed (no downloads), and the same pass runs at
+every start; files whose content would not change are left alone. Ask your media
+server to refresh metadata to pick the changes up.
+
+Known limit: cleanup works on whole paragraphs, so sponsor text mixed into a
+paragraph of real content is kept. The sponsor phrase list is a heuristic and
+will miss some reads.
 
 ### Single sign-on (OIDC)
 
@@ -250,11 +299,12 @@ re-adopted, so upgrading never loses your archive.
 turns this off), so when YouTube changes something and downloads start failing,
 restarting the container is usually the whole fix — no new image required.
 
-Metadata sidecars are also brought up to date in the background on every start,
-so an archive downloaded by an older version gets whatever the current one
-writes without being re-downloaded. Files are only rewritten when their content
-would actually change. When that happens, tell your media server to refresh its
-metadata — it has no reason to re-read a file it already scanned. Watch for:
+Metadata sidecars and podcast feeds are also brought up to date in the background
+on every start, so an archive downloaded by an older version gets whatever the
+current one writes without being re-downloaded. Files are only rewritten when
+their content would actually change. When that happens, tell your media server to
+refresh its metadata — it has no reason to re-read a file it already scanned. Watch
+for:
 
 ```
 INFO brought metadata sidecars up to date files=11
@@ -481,6 +531,8 @@ the media root.
   local-metadata agent has pictures to show
 - Podcast feeds: every source is a subscribable RSS feed at `/feeds/<id>` (the
   address is on the source's page), so a podcast app can stream the archive
+- Optional per-source cleanup of sponsor and boilerplate paragraphs in `.nfo`
+  plots and feed descriptions (off by default; see "Cleaning up descriptions")
 - SponsorBlock (remove or mark segments), defaulting to sponsors only — removal
   is permanent, so the broader categories are opt-in
 - yt-dlp updates itself at startup, so YouTube breakage is fixed by restarting
@@ -538,6 +590,8 @@ internal/cookies     cookie parsing + login health/expiry assessment
 internal/metadata    Kodi/Jellyfin .nfo writer
 internal/artwork     channel poster/backdrop/season art writer
 internal/feed        RSS/podcast feed generation
+internal/descclean   description cleanup at output time (pure, standard library only)
+internal/fsutil      atomic file writes for sidecars and feeds
 internal/sponsorblock, internal/notify, internal/events, internal/config, internal/web
 ```
 

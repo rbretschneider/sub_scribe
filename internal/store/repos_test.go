@@ -78,6 +78,7 @@ func seedSource(t *testing.T, db *DB, profileID int64, enabled bool, lastIndexed
 		LivestreamsRule:    domain.InclusionInclude,
 		RetentionAfter:     30 * 24 * time.Hour,
 		CutoffWindow:       365 * 24 * time.Hour,
+		DescriptionCleanup: domain.DescriptionCleanupOff,
 		CreatedAt:          unixTime(1_700_000_100),
 		UpdatedAt:          unixTime(1_700_000_100),
 	}

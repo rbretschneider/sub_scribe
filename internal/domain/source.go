@@ -43,6 +43,14 @@ type Source struct {
 	// RetentionAfter, when non-zero, deletes downloaded media older than this age.
 	RetentionAfter time.Duration
 
+	// DescriptionCleanup says whether boilerplate is removed from descriptions in
+	// this source's sidecars and feed. The zero value means off.
+	DescriptionCleanup DescriptionCleanup
+	// DescriptionStripPatterns are the user's regular expressions; a paragraph
+	// matching any of them is removed when cleanup is on. They are validated by
+	// the descclean package, not here.
+	DescriptionStripPatterns []string
+
 	// FeedToken is the capability secret in the source's podcast feed URL
 	// (/feeds/{id}?t=token). Podcast apps cannot log in through a browser SSO
 	// flow, so the token in the URL is what authorizes them when the UI is
@@ -51,6 +59,11 @@ type Source struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// CleansDescriptions reports whether description cleanup is switched on.
+func (s Source) CleansDescriptions() bool {
+	return s.DescriptionCleanup == DescriptionCleanupOn
 }
 
 // feedTokenBytes sizes the feed token: 16 random bytes (128 bits) rendered as

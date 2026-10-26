@@ -97,7 +97,9 @@ func (s *Service) ApplyNamingTemplate(ctx context.Context, sourceID int64) (Rena
 	return report, nil
 }
 
-// refreshEpisodeMetadata rewrites an item's sidecar at its current path.
+// refreshEpisodeMetadata rewrites an item's sidecar at its current path. It goes
+// through forOutput like every other sidecar write, so a rename pass cannot undo
+// description cleanup.
 //
 // A sidecar written under an older version of sub_scribe can be missing the
 // season and episode elements a media server needs to place the episode, and a
@@ -108,7 +110,7 @@ func (s *Service) refreshEpisodeMetadata(ctx context.Context, sourceID int64, re
 	if !ok {
 		return
 	}
-	if _, err := s.deps.Metadata.WriteFor(ctx, at, media, source.Name, profile.MetadataFormat); err != nil {
+	if _, err := s.deps.Metadata.WriteFor(ctx, at, s.forOutput(ctx, source, media, nil), source.Name, profile.MetadataFormat); err != nil {
 		log.Printf("library: refresh metadata for %q: %v", at, err)
 	}
 }

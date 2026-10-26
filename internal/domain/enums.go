@@ -67,6 +67,33 @@ func (c CookieBehavior) IsValid() bool {
 	}
 }
 
+// DescriptionCleanup selects whether a source's descriptions are cleaned of
+// boilerplate (repeated channel text, sponsor reads, user patterns) in the
+// sidecars and feed it writes. The stored description is never changed either way.
+type DescriptionCleanup string
+
+const (
+	// DescriptionCleanupOff writes descriptions exactly as stored (the default).
+	DescriptionCleanupOff DescriptionCleanup = "off"
+	// DescriptionCleanupOn removes boilerplate paragraphs from what is written.
+	DescriptionCleanupOn DescriptionCleanup = "on"
+)
+
+// IsValid reports whether the value is a recognized mode. The zero value is not
+// valid here; use Effective to treat it as off.
+func (d DescriptionCleanup) IsValid() bool {
+	return d == DescriptionCleanupOff || d == DescriptionCleanupOn
+}
+
+// Effective maps the zero value to off, so a Source built without the field
+// behaves like every pre-existing source.
+func (d DescriptionCleanup) Effective() DescriptionCleanup {
+	if d == "" {
+		return DescriptionCleanupOff
+	}
+	return d
+}
+
 // InclusionRule decides whether a category of media (Shorts, livestreams) is
 // downloaded, ignored, or downloaded only when it already exists locally.
 type InclusionRule string

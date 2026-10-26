@@ -270,6 +270,29 @@ var migrations = []migration{
 		stmt: `ALTER TABLE media
 			ADD COLUMN quality_note TEXT NOT NULL DEFAULT ''`,
 	},
+	{
+		version: 23,
+		name:    "add_source_description_cleanup",
+		// Per-source switch for removing boilerplate from written descriptions.
+		// Defaults off, so every existing source keeps its current output.
+		stmt: `ALTER TABLE sources
+			ADD COLUMN description_cleanup TEXT NOT NULL DEFAULT 'off'`,
+	},
+	{
+		version: 24,
+		name:    "add_source_description_strip_patterns",
+		// The user's strip patterns, as a JSON array like subtitle_languages.
+		stmt: `ALTER TABLE sources
+			ADD COLUMN description_strip_patterns TEXT NOT NULL DEFAULT '[]'`,
+	},
+	{
+		version: 25,
+		name:    "index_media_uploader_descriptions",
+		// Channel history is read by uploader across the whole library. The partial
+		// index covers exactly the rows that count (non-empty descriptions), so the
+		// count and fetch stay cheap however large the library grows.
+		stmt: `CREATE INDEX idx_media_uploader ON media(uploader) WHERE description <> ''`,
+	},
 }
 
 // backfillFeedTokens assigns a fresh random token to every source created

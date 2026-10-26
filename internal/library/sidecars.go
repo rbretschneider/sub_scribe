@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"sub_scribe/internal/descclean"
 	"sub_scribe/internal/domain"
 )
 
@@ -45,6 +46,30 @@ func (s *Service) RefreshSidecars(ctx context.Context) (int, error) {
 	return refreshed, nil
 }
 
+// refreshFeed regenerates a source's feed so a change to description cleanup
+// reaches it too. A source with nothing downloaded has no feed worth writing
+// unless cleanup is on. The feed writer skips an unchanged feed, so for a source
+// with cleanup off this costs a read and no write.
+func (s *Service) refreshFeed(ctx context.Context, source domain.Source, items []domain.Media, downloaded int, budget *descclean.Budget) {
+	if downloaded == 0 && !source.CleansDescriptions() {
+		return
+	}
+	if err := s.deps.Feed.WriteFeed(ctx, source, s.forOutputBatch(ctx, source, items, budget)); err != nil {
+		slog.WarnContext(ctx, "could not refresh feed", "source_id", source.ID, "error", err)
+	}
+}
+
+// RefreshSourceSidecars rewrites one source's metadata files and feed from its
+// current settings and returns how many metadata files changed. The count leaves
+// the feed out because the feed port does not report whether it wrote.
+func (s *Service) RefreshSourceSidecars(ctx context.Context, sourceID int64) (int, error) {
+	source, err := s.deps.Sources.Get(ctx, sourceID)
+	if err != nil {
+		return 0, fmt.Errorf("get source for sidecar refresh: %w", err)
+	}
+	return s.refreshSourceSidecars(ctx, source)
+}
+
 // refreshSourceSidecars rewrites one source's sidecars, reporting how many
 // changed. A source whose profile has gone missing is skipped rather than
 // failing the whole pass: recovery should repair what it can.
@@ -58,13 +83,17 @@ func (s *Service) refreshSourceSidecars(ctx context.Context, source domain.Sourc
 		return 0, fmt.Errorf("list media for sidecar refresh: %w", err)
 	}
 
+	// One time budget covers the whole run: the sidecars and then the feed.
+	budget := s.newBudget()
 	refreshed := 0
 	wroteShow := false
+	downloaded := 0
 	for _, media := range items {
 		if media.Status != domain.MediaDownloaded || media.FilePath == "" {
 			continue
 		}
-		changed, err := s.deps.Metadata.WriteFor(ctx, media.FilePath, media, source.Name, profile.MetadataFormat)
+		downloaded++
+		changed, err := s.deps.Metadata.WriteFor(ctx, media.FilePath, s.forOutput(ctx, source, media, budget), source.Name, profile.MetadataFormat)
 		if err != nil {
 			slog.WarnContext(ctx, "could not refresh metadata sidecar",
 				"media_id", media.ID, "path", media.FilePath, "error", err)
@@ -80,5 +109,6 @@ func (s *Service) refreshSourceSidecars(ctx context.Context, source domain.Sourc
 			wroteShow = true
 		}
 	}
+	s.refreshFeed(ctx, source, items, downloaded, budget)
 	return refreshed, nil
 }

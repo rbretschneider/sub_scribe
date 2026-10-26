@@ -116,6 +116,22 @@
   </div>
 
   <div class="field">
+    <label for="description_cleanup">Clean up descriptions</label>
+    <select id="description_cleanup" name="description_cleanup">
+      <option value="off" {{selected .Values.DescriptionCleanup "off"}}>Off — write descriptions as they are</option>
+      <option value="on" {{selected .Values.DescriptionCleanup "on"}}>On — remove sponsor and repeated boilerplate paragraphs</option>
+    </select>
+    <p class="field-hint">Applies to the episode info file and the podcast feed. The stored description is never changed.</p>
+  </div>
+
+  <div class="field">
+    <label for="description_strip_patterns">Remove paragraphs matching <span class="optional">(optional, one Go regular expression per line)</span></label>
+    <textarea id="description_strip_patterns" name="description_strip_patterns" rows="3" autocomplete="off"
+              placeholder="e.g. follow me on (twitter|instagram)">{{.Values.StripPatterns}}</textarea>
+    <p class="field-hint">Matched without regard to letter case, up to 20 patterns of at most 500 bytes.</p>
+  </div>
+
+  <div class="field">
     <label for="retention_preset">Delete downloads older than</label>
     <div class="field-pair">
       <select id="retention_preset" name="retention_preset" data-retention-select>

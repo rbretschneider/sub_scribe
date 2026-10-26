@@ -66,5 +66,32 @@
   <p class="description">{{.Item.Media.Metadata.Description}}</p>
 </div>
 {{end}}
+
+{{with .Preview}}
+<div class="panel" id="cleaned-description">
+  <h2 class="panel-title">Cleaned description</h2>
+  <p class="muted">
+    {{if .Enabled}}Cleanup is on for this source.{{else}}Cleanup is off for this source: this is what it would remove.{{end}}
+    <a href="/sources/{{.SourceID}}/edit">Edit the source</a>
+  </p>
+  {{if .Unavailable}}
+  <p class="muted">Preview unavailable: {{.UnavailableReason}}.</p>
+  {{else}}
+  {{if .PatternsIgnored}}<p class="muted">Your patterns are too complex and were ignored.</p>{{end}}
+  {{if .FellBack}}<p class="muted">Every paragraph matched, so the original description is kept.</p>{{end}}
+  <p class="description">{{.Cleaned}}</p>
+  {{if .Removed}}
+  <h3>Removed paragraphs</h3>
+  <ul class="removed-paragraphs">
+    {{range .Removed}}
+    <li><strong>{{.Label}}</strong><pre class="description">{{.Text}}</pre></li>
+    {{end}}
+  </ul>
+  {{else}}
+  <p class="muted">Nothing would be removed.</p>
+  {{end}}
+  {{end}}
+</div>
+{{end}}
 </div>
 {{end}}

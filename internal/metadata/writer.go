@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"sub_scribe/internal/domain"
+	"sub_scribe/internal/fsutil"
 	"sub_scribe/internal/library"
 )
 
@@ -47,7 +48,7 @@ func (w *Writer) WriteFor(ctx context.Context, mediaFilePath string, media domai
 	if unchanged(nfoPath, body) {
 		return false, nil
 	}
-	if err := os.WriteFile(nfoPath, body, nfoFileMode); err != nil {
+	if err := fsutil.WriteFileAtomic(nfoPath, body, nfoFileMode); err != nil {
 		return false, fmt.Errorf("write nfo to %q: %w", nfoPath, err)
 	}
 	return true, nil
@@ -88,7 +89,7 @@ func (w *Writer) WriteShow(ctx context.Context, showDir, name, url string) (bool
 	if err := os.MkdirAll(showDir, showDirMode); err != nil {
 		return false, fmt.Errorf("create show directory %q: %w", showDir, err)
 	}
-	if err := os.WriteFile(path, body, nfoFileMode); err != nil {
+	if err := fsutil.WriteFileAtomic(path, body, nfoFileMode); err != nil {
 		return false, fmt.Errorf("write show nfo to %q: %w", path, err)
 	}
 	return true, nil
