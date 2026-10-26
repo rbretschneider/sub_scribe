@@ -406,7 +406,7 @@ func stripPatternMessage(err error) string {
 	case errors.Is(err, descclean.ErrTooMany):
 		return "Please use at most 20 description patterns."
 	case errors.Is(err, descclean.ErrTooLong):
-		return "A description pattern is longer than 500 characters" + excerpt + "."
+		return "A description pattern is longer than 500 bytes" + excerpt + "."
 	case errors.Is(err, descclean.ErrTooComplexTogether):
 		return "The description patterns are too complex together. Remove or simplify some patterns."
 	case errors.Is(err, descclean.ErrTooComplex):
