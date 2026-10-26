@@ -119,6 +119,9 @@ internal/library        APPLICATION CORE. Service implements SourceService,
 internal/tasks          Bridges jobs.Task -> library calls. Register(registry,Deps)
 internal/metadata       Kodi/Jellyfin .nfo writer (BuildEpisodeNFO + Writer).
 internal/feed           RSS/podcast feed generation (BuildRSS + Writer).
+internal/descclean      Output-time description cleanup: paragraphs, repetition stats,
+                        sponsor rule, user-pattern limits. Pure, stdlib only.
+internal/fsutil         WriteFileAtomic (temp file + rename) for sidecars and feeds.
 internal/sponsorblock   Builds yt-dlp SponsorBlock args from profile settings.
 internal/notify         Apprise notifier + NopNotifier.
 internal/events         events.Publisher (FROZEN) + SSE Hub (Publish + ServeHTTP).

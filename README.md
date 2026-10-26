@@ -159,6 +159,49 @@ that authorizes the feed on its own — podcast apps can't complete a browser
 login, so the address is the key. Treat it like a password. Basic-auth
 credentials (`http://user:pass@host` form) keep working as well.
 
+### Cleaning up descriptions
+
+YouTube descriptions often carry text that has nothing to do with the video:
+sponsor reads with promo codes, merch and social links, a disclaimer pasted on
+every upload. Each source has a **Clean up descriptions** setting, **Off by
+default**. With it Off, the episode `.nfo` plot and the podcast feed are exactly
+what they were before.
+
+With it **On**, whole paragraphs (text separated by a blank line) are removed
+from what is written, by three layers:
+
+1. **Repeated in the channel.** A paragraph is removed when, ignoring letter
+   case and spacing, it appears in at least half of the stored descriptions from
+   the same channel (uploader), and at least 5 descriptions from that channel are
+   stored. It is counted across the whole library, not per source, and is based
+   on videos already downloaded (or fetched in full), so a young archive has less
+   to go on.
+2. **Sponsor rule (English only).** A paragraph is removed when it holds both a
+   sponsor phrase ("sponsored by", "brought to you by", "#ad", ...) and a link or
+   a promo phrase ("use code", "% off", ...). A paragraph with only one is kept.
+3. **Your patterns.** Under **Remove paragraphs matching**, add Go regular
+   expressions, one per line; a paragraph matching any is removed. Matching
+   ignores letter case unless the pattern starts with `(?-i)`. Limits: at most 20
+   patterns, each at most 500 characters, repeat counts up to 100, and an overall
+   complexity cap. A pattern that breaks a limit is refused with a message.
+
+Chapter lists (lines starting with a time such as `0:00`) are never removed by
+layers 1 and 2. If every paragraph would be removed, the original description is
+kept. The original is always stored unchanged, so turning cleanup Off restores it
+everywhere. Only the `.nfo` plot and, for sources with cleanup On, a new
+`<description>` on each feed item change; descriptions embedded in the media
+files are untouched. The video's page shows the cleaned text and each removed
+paragraph with its reason, even for sources where cleanup is Off.
+
+Changing the setting or the patterns queues a background job that rewrites the
+affected `.nfo` files and the feed (no downloads), and the same pass runs at
+every start; files whose content would not change are left alone. Ask your media
+server to refresh metadata to pick the changes up.
+
+Known limit: cleanup works on whole paragraphs, so sponsor text mixed into a
+paragraph of real content is kept. The sponsor phrase list is a heuristic and
+will miss some reads.
+
 ### Single sign-on (OIDC)
 
 sub_scribe can hand its login to your identity provider (authentik, Keycloak,
@@ -481,6 +524,8 @@ the media root.
   local-metadata agent has pictures to show
 - Podcast feeds: every source is a subscribable RSS feed at `/feeds/<id>` (the
   address is on the source's page), so a podcast app can stream the archive
+- Optional per-source cleanup of sponsor and boilerplate paragraphs in `.nfo`
+  plots and feed descriptions (off by default; see "Cleaning up descriptions")
 - SponsorBlock (remove or mark segments), defaulting to sponsors only — removal
   is permanent, so the broader categories are opt-in
 - yt-dlp updates itself at startup, so YouTube breakage is fixed by restarting
