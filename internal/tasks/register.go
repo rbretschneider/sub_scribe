@@ -12,4 +12,5 @@ func Register(reg *jobs.Registry, deps Deps) {
 	reg.Register(jobs.TaskRedownload, RedownloadHandler(deps.Redownloader))
 	reg.Register(jobs.TaskPruneJobs, PruneJobsHandler(deps.JobPruner))
 	reg.Register(jobs.TaskRenameFiles, RenameHandler(deps.Renamer))
+	reg.Register(jobs.TaskRefreshSidecars, RefreshSidecarsHandler(deps.SidecarRefresher))
 }

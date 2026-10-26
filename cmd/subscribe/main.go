@@ -22,6 +22,7 @@ import (
 	"sub_scribe/internal/applog"
 	"sub_scribe/internal/artwork"
 	"sub_scribe/internal/config"
+	"sub_scribe/internal/descclean"
 	"sub_scribe/internal/domain"
 	"sub_scribe/internal/events"
 	"sub_scribe/internal/feed"
@@ -178,6 +179,8 @@ func buildService(cfg config.Config, db *store.DB, hub *events.Hub, clock jobs.C
 		TempDir:      cfg.TempDir,
 		CookiesPath:  cfg.CookiesPath,
 		JobRetention: cfg.JobRetention,
+		Cleaner:      descclean.NewCleaner(),
+		History:      db.Media(),
 	})
 }
 
@@ -347,12 +350,13 @@ func serve(cfg config.Config, db *store.DB, svc *library.Service, clock jobs.Clo
 
 	registry := jobs.NewRegistry()
 	tasks.Register(registry, tasks.Deps{
-		Indexer:      svc,
-		Downloader:   svc,
-		Retainer:     svc,
-		Redownloader: svc,
-		JobPruner:    svc,
-		Renamer:      svc,
+		Indexer:          svc,
+		Downloader:       svc,
+		Retainer:         svc,
+		Redownloader:     svc,
+		JobPruner:        svc,
+		Renamer:          svc,
+		SidecarRefresher: svc,
 	})
 	pool := jobs.NewPool(db.Tasks(), registry, clock, jobs.PoolConfig{
 		Workers:    cfg.Workers,
