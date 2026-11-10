@@ -863,7 +863,10 @@ func (s *Service) awaitDownloadSlot(ctx context.Context, mediaID int64, media do
 		MediaID:  mediaID,
 		Title:    media.Metadata.Title,
 	})
-	return jobs.Defer(slot, waitingForSlotReason)
+	// Routine: with several downloads queued, every slot wakes all of them and
+	// re-defers all but one, so this exact deferral is most of what the worker
+	// does — it is the pacing design working, not news.
+	return jobs.DeferRoutine(slot, waitingForSlotReason)
 }
 
 // waitingForSlotReason is shown on the job's detail view while it waits, so a
@@ -1009,6 +1012,9 @@ func (s *Service) recordFailure(ctx context.Context, mediaID int64, media domain
 	if errors.Is(cause, ytdlp.ErrThrottled) {
 		return s.deferThrottled(ctx, mediaID, media, cause, now)
 	}
+	if errors.Is(cause, ytdlp.ErrAccessDenied) {
+		return s.markBlocked(ctx, mediaID, media, cause, now)
+	}
 	return s.recordDownloadFailure(ctx, mediaID, media, cause, now)
 }
 
@@ -1053,6 +1059,37 @@ func (s *Service) markUnavailable(ctx context.Context, mediaID int64, media doma
 	})
 	slog.WarnContext(ctx, "media unavailable from provider",
 		"media_id", mediaID, "title", media.Metadata.Title, "reason", cause.Error())
+	return nil
+}
+
+// blockedNotificationTitle heads the push notification for a 403-blocked
+// download, so the user learns the day it starts rather than finding a queue
+// of stale failures a week later.
+const blockedNotificationTitle = "Download blocked (HTTP 403)"
+
+// markBlocked settles a download the provider refused with HTTP 403 under
+// every player client tried. It is deliberately NOT retried: each retry waits
+// behind the download pacing, so three attempts at a fail-fast refusal
+// stretch one blocked video into hours of quiet shuffling — and this failure
+// mode tends to hit a whole source at once. The item is marked failed
+// immediately with the reason, the failure is escalated to the notifier, and
+// the user re-queues it from the UI once the cause (usually the provider
+// blocking a client identity) has passed.
+func (s *Service) markBlocked(ctx context.Context, mediaID int64, media domain.Media, cause error, now time.Time) error {
+	if err := s.deps.Media.SetError(ctx, mediaID, domain.MediaFailed, cause.Error(), now); err != nil {
+		return fmt.Errorf("mark blocked: %w", err)
+	}
+	s.deps.Events.Publish(events.Event{
+		Kind:    events.KindMediaFailed,
+		MediaID: mediaID,
+		Title:   media.Metadata.Title,
+		Message: cause.Error(),
+	})
+	slog.ErrorContext(ctx, "provider denied access to a download; failing it now instead of retrying",
+		"media_id", mediaID, "title", media.Metadata.Title, "reason", cause.Error())
+	if err := s.deps.Notifier.Notify(ctx, blockedNotificationTitle, media.Metadata.Title); err != nil {
+		log.Printf("library: notify blocked download %q: %v", media.Metadata.Title, err)
+	}
 	return nil
 }
 
@@ -1127,6 +1164,12 @@ func (s *Service) writeShowSidecars(ctx context.Context, source domain.Source, f
 // per-video thumbnails yt-dlp already writes cover the episodes; this covers the
 // show and its seasons, which would otherwise stay blank placeholders.
 func (s *Service) writeShowArtwork(ctx context.Context, source domain.Source, showDir string) {
+	// The singles bucket tracks no remote collection, so there is no channel
+	// URL to fetch imagery from — asking yt-dlp for "" just logged an error
+	// after every one-off download.
+	if source.URL == "" {
+		return
+	}
 	if !s.deps.Artwork.NeedsArt(showDir) {
 		return
 	}

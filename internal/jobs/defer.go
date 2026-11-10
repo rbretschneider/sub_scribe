@@ -20,6 +20,13 @@ type Deferral struct {
 	// Reason is shown in the log and the job's detail view, so a task sitting in
 	// the queue explains itself rather than looking stuck.
 	Reason string
+	// Routine marks a deferral that is ordinary scheduling — a download waiting
+	// out the deliberate spacing — rather than a reaction to a problem. The
+	// worker logs routine deferrals at debug: with several downloads queued,
+	// every slot wakes all of them and re-defers all but one, and that
+	// claim/defer chatter was most of the log while saying nothing the queue
+	// row's reason does not already say.
+	Routine bool
 }
 
 // Error describes the deferral, for logs and the job detail view.
@@ -31,4 +38,11 @@ func (d *Deferral) Error() string {
 // without counting an attempt.
 func Defer(runAfter time.Time, reason string) error {
 	return &Deferral{RunAfter: runAfter, Reason: reason}
+}
+
+// DeferRoutine is Defer for expected scheduling waits, logged quietly. Use it
+// when deferring is the design working (pacing), not something worth a log
+// line per occurrence (backing off from a rate limit).
+func DeferRoutine(runAfter time.Time, reason string) error {
+	return &Deferral{RunAfter: runAfter, Reason: reason, Routine: true}
 }
