@@ -39,11 +39,21 @@ var throttledMarkers = []string{
 	"rate-limited by youtube",
 }
 
+// accessDeniedMarkers are fragments of yt-dlp's output that mean the provider
+// refused the request outright with HTTP 403. Checked last: a 403 wrapped in
+// bot-check or members-only wording is really one of those, and only a bare
+// 403 means "this client identity is blocked" — the case the download path
+// answers by retrying without the pinned player client.
+var accessDeniedMarkers = []string{
+	"http error 403",
+}
+
 // classifyError tags a yt-dlp failure by what its output reveals: throttling
-// (back off), or a permanent "we will never be allowed to fetch this" refusal
-// (give up). Throttling is checked first because a bot-check page can carry
-// other error text alongside it. The original error is always preserved as the
-// cause; only the classification is added.
+// (back off), a permanent "we will never be allowed to fetch this" refusal
+// (give up), or a bare 403 access denial (escalate). Throttling is checked
+// first because a bot-check page can carry other error text alongside it, and
+// the 403 is checked last for the same reason. The original error is always
+// preserved as the cause; only the classification is added.
 func classifyError(err error, stderr string) error {
 	if err == nil {
 		return nil
@@ -54,7 +64,25 @@ func classifyError(err error, stderr string) error {
 	if reason, ok := unavailableReason(stderr); ok {
 		return fmt.Errorf("%w (%s): %w", ErrUnavailable, reason, err)
 	}
+	if reason, ok := matchMarker(stderr, accessDeniedMarkers); ok {
+		return fmt.Errorf("%w (%s): %w", ErrAccessDenied, reason, err)
+	}
 	return err
+}
+
+// shouldRetryWithFallbackClient reports whether a failed download's output
+// points at the pinned player client being blocked — a bare HTTP 403, with no
+// bot-check and no per-video refusal — which one retry under yt-dlp's own
+// client selection tends to fix.
+func shouldRetryWithFallbackClient(stderr string) bool {
+	if _, ok := matchMarker(stderr, throttledMarkers); ok {
+		return false
+	}
+	if _, ok := unavailableReason(stderr); ok {
+		return false
+	}
+	_, ok := matchMarker(stderr, accessDeniedMarkers)
+	return ok
 }
 
 // unavailableReason reports which permanent-failure marker the output matched,

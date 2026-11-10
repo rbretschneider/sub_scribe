@@ -150,22 +150,61 @@ const (
 )
 
 // Download fetches one item, streaming progress to onProgress and capturing the
-// final file path yt-dlp prints after moving the completed download.
+// final file path yt-dlp prints after moving the completed download. A refusal
+// that looks like the pinned player client being blocked (a bare HTTP 403) is
+// retried once under yt-dlp's own client selection before the failure stands.
 func (r *ExecRunner) Download(ctx context.Context, url string, opts DownloadOptions, onProgress ProgressFunc) (DownloadResult, error) {
-	if err := r.pacer.Wait(ctx); err != nil {
-		return DownloadResult{}, fmt.Errorf("yt-dlp download %q: %w", url, err)
+	// A finished file already at the destination is a retry of completed work,
+	// and yt-dlp must not be invoked for it: told to download anyway, it skips
+	// the transfer but still re-runs post-processing (--embed-thumbnail) on the
+	// file in place, and that temp-file rename dance is exactly what fails on a
+	// network mount — a failed rename back has destroyed a finished download.
+	// Adopting the file costs nothing and cannot break it.
+	if existing, ok := findExistingDownload(opts); ok {
+		slog.InfoContext(ctx, "finished file already on disk; adopting it instead of re-downloading",
+			"path", existing)
+		return buildDownloadResult(url, existing, 0, opts)
 	}
-	cmd := exec.CommandContext(ctx, r.binaryPath, buildDownloadArgs(url, opts, r.potProviderURL, r.throttle)...)
+
+	outcome, err := r.downloadOnce(ctx, url, buildDownloadArgs(url, opts, r.potProviderURL, r.throttle), onProgress)
+	if err != nil && ctx.Err() == nil && shouldRetryWithFallbackClient(outcome.stderr) {
+		slog.WarnContext(ctx, "pinned player client was refused with HTTP 403; retrying once with yt-dlp's own client selection",
+			"pinned_client", defaultPlayerClient)
+		args := buildDownloadArgsForClient(url, opts, r.potProviderURL, r.throttle, fallbackPlayerClient)
+		outcome, err = r.downloadOnce(ctx, url, args, onProgress)
+	}
+	if err != nil {
+		return DownloadResult{}, err
+	}
+	return buildDownloadResult(url, outcome.filePath, outcome.height, opts)
+}
+
+// downloadOutcome carries one yt-dlp run's parsed stdout alongside the raw
+// stderr, which the caller needs to decide whether a failure merits the
+// fallback player client.
+type downloadOutcome struct {
+	filePath string
+	height   int
+	stderr   string
+}
+
+// downloadOnce waits for a pacing slot and runs one yt-dlp download
+// invocation, classifying any failure by its stderr.
+func (r *ExecRunner) downloadOnce(ctx context.Context, url string, args []string, onProgress ProgressFunc) (downloadOutcome, error) {
+	if err := r.pacer.Wait(ctx); err != nil {
+		return downloadOutcome{}, fmt.Errorf("yt-dlp download %q: %w", url, err)
+	}
+	cmd := exec.CommandContext(ctx, r.binaryPath, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return DownloadResult{}, fmt.Errorf("yt-dlp download %q: stdout pipe: %w", url, err)
+		return downloadOutcome{}, fmt.Errorf("yt-dlp download %q: stdout pipe: %w", url, err)
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		return DownloadResult{}, fmt.Errorf("yt-dlp download %q: stderr pipe: %w", url, err)
+		return downloadOutcome{}, fmt.Errorf("yt-dlp download %q: stderr pipe: %w", url, err)
 	}
 	if err := cmd.Start(); err != nil {
-		return DownloadResult{}, fmt.Errorf("yt-dlp download %q: start: %w", url, err)
+		return downloadOutcome{}, fmt.Errorf("yt-dlp download %q: start: %w", url, err)
 	}
 
 	// yt-dlp's warnings and errors are the most useful thing in a job's log, so
@@ -180,11 +219,12 @@ func (r *ExecRunner) Download(ctx context.Context, url string, opts DownloadOpti
 
 	filePath, height := scanDownloadOutput(stdout, onProgress)
 	<-stderrDone
+	outcome := downloadOutcome{filePath: filePath, height: height, stderr: stderr.String()}
 	if err := cmd.Wait(); err != nil {
-		return DownloadResult{}, classifyError(
-			fmt.Errorf("yt-dlp download %q: %w: %s", url, err, stderr.String()), stderr.String())
+		return outcome, classifyError(
+			fmt.Errorf("yt-dlp download %q: %w: %s", url, err, outcome.stderr), outcome.stderr)
 	}
-	return buildDownloadResult(url, filePath, height, opts)
+	return outcome, nil
 }
 
 // relayStderr logs each line yt-dlp writes to stderr as it arrives and copies it

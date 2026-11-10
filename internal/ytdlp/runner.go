@@ -22,6 +22,14 @@ var ErrFilteredOut = errors.New("ytdlp: item skipped by filter")
 // slow-down into an account flag, so callers should back off, not retry.
 var ErrThrottled = errors.New("ytdlp: provider is throttling this client")
 
+// ErrAccessDenied reports that the provider answered the download with HTTP
+// 403 under every player client that was tried — most often YouTube blocking
+// a client identity, not a problem with the video. Unlike ErrThrottled there
+// is no bot-check or rate-limit text to wait out, and unlike ErrUnavailable
+// the item itself is fine, so callers should surface it loudly rather than
+// spend paced retries proving the same refusal again.
+var ErrAccessDenied = errors.New("ytdlp: provider denied access (HTTP 403)")
+
 // ErrUnavailable reports that the provider will not serve this item to us at all:
 // it is members-only, private, removed, or otherwise permanently out of reach.
 // Retrying cannot help, so callers should record it and move on rather than
