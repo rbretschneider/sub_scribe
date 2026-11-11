@@ -727,8 +727,10 @@ func metadataFromEntry(entry ytdlp.IndexEntry) domain.MediaMetadata {
 // DownloadMedia fetches one pending item, records the result, writes its
 // sidecar metadata, regenerates the source feed, and notifies the user. On
 // download failure it marks the item failed and returns a wrapped error so the
-// download task retries.
-func (s *Service) DownloadMedia(ctx context.Context, mediaID int64) error {
+// download task retries. The attempt says which try of the task's budget this
+// is, so a 403 block can schedule its own longer-range retry and still give up
+// when the budget runs out.
+func (s *Service) DownloadMedia(ctx context.Context, mediaID int64, attempt jobs.Attempt) error {
 	media, err := s.deps.Media.Get(ctx, mediaID)
 	if err != nil {
 		return fmt.Errorf("get media: %w", err)
@@ -750,7 +752,7 @@ func (s *Service) DownloadMedia(ctx context.Context, mediaID int64) error {
 
 	media, err = s.ensureMetadata(ctx, source, media, now)
 	if err != nil {
-		return s.recordFailure(ctx, mediaID, media, err, now)
+		return s.recordFailure(ctx, mediaID, media, err, attempt, now)
 	}
 	// Now that the real upload date is known, apply the source's window here
 	// rather than paying for a download that yt-dlp would only refuse. Indexing a
@@ -793,7 +795,7 @@ func (s *Service) DownloadMedia(ctx context.Context, mediaID int64) error {
 		return s.markSkipped(ctx, mediaID, media, now)
 	}
 	if err != nil {
-		return s.recordFailure(ctx, mediaID, media, err, now)
+		return s.recordFailure(ctx, mediaID, media, err, attempt, now)
 	}
 
 	if err := s.deps.Media.MarkDownloaded(ctx, mediaID, res.FilePath, res.FileSize, now); err != nil {
@@ -1005,7 +1007,7 @@ func (s *Service) markSkipped(ctx context.Context, mediaID int64, media domain.M
 // lookup as much as the transfer itself — treats a members-only or removed video
 // the same way. Routing around it is how such a video ends up burning three
 // attempts and reporting a generic failure.
-func (s *Service) recordFailure(ctx context.Context, mediaID int64, media domain.Media, cause error, now time.Time) error {
+func (s *Service) recordFailure(ctx context.Context, mediaID int64, media domain.Media, cause error, attempt jobs.Attempt, now time.Time) error {
 	if errors.Is(cause, ytdlp.ErrUnavailable) {
 		return s.markUnavailable(ctx, mediaID, media, cause, now)
 	}
@@ -1013,7 +1015,7 @@ func (s *Service) recordFailure(ctx context.Context, mediaID int64, media domain
 		return s.deferThrottled(ctx, mediaID, media, cause, now)
 	}
 	if errors.Is(cause, ytdlp.ErrAccessDenied) {
-		return s.markBlocked(ctx, mediaID, media, cause, now)
+		return s.markBlocked(ctx, mediaID, media, cause, attempt, now)
 	}
 	return s.recordDownloadFailure(ctx, mediaID, media, cause, now)
 }
@@ -1063,21 +1065,49 @@ func (s *Service) markUnavailable(ctx context.Context, mediaID int64, media doma
 }
 
 // blockedNotificationTitle heads the push notification for a 403-blocked
-// download, so the user learns the day it starts rather than finding a queue
-// of stale failures a week later.
+// download whose automatic retries are exhausted, so the user learns the
+// block outlasted the self-healing window rather than finding a queue of
+// stale failures a week later.
 const blockedNotificationTitle = "Download blocked (HTTP 403)"
 
-// markBlocked settles a download the provider refused with HTTP 403 under
-// every player client tried. It is deliberately NOT retried: each retry waits
-// behind the download pacing, so three attempts at a fail-fast refusal
-// stretch one blocked video into hours of quiet shuffling — and this failure
-// mode tends to hit a whole source at once. The item is marked failed
-// immediately with the reason, the failure is escalated to the notifier, and
-// the user re-queues it from the UI once the cause (usually the provider
-// blocking a client identity) has passed.
-func (s *Service) markBlocked(ctx context.Context, mediaID int64, media domain.Media, cause error, now time.Time) error {
+// blockedRetryDelays spaces the automatic retries of a 403-blocked download.
+// A client block usually clears within hours, so the first comeback is quick
+// and the later ones patient; the task's attempt budget is what bounds the
+// loop, so a block that never clears settles as failed instead of circling.
+// An attempt past the end of the schedule reuses the last delay.
+var blockedRetryDelays = []time.Duration{time.Hour, 6 * time.Hour}
+
+// blockedRetryDelay returns how long to stand down after the given (1-based)
+// blocked attempt before trying again.
+func blockedRetryDelay(attempt int) time.Duration {
+	if attempt < 1 {
+		attempt = 1
+	}
+	if attempt > len(blockedRetryDelays) {
+		attempt = len(blockedRetryDelays)
+	}
+	return blockedRetryDelays[attempt-1]
+}
+
+// markBlocked handles a download the provider refused with HTTP 403 under
+// every player client tried. The item is marked failed with the reason either
+// way; while the task has budget left the next try is scheduled hours out —
+// a client block usually passes on its own, and retrying behind the standard
+// seconds-to-minutes backoff only collects the same refusal — and once the
+// budget is spent the failure is escalated to the notifier and the task
+// settles, leaving the user to re-queue it from the UI if the block ever
+// clears. Self-healing, but bounded.
+func (s *Service) markBlocked(ctx context.Context, mediaID int64, media domain.Media, cause error, attempt jobs.Attempt, now time.Time) error {
 	if err := s.deps.Media.SetError(ctx, mediaID, domain.MediaFailed, cause.Error(), now); err != nil {
 		return fmt.Errorf("mark blocked: %w", err)
+	}
+	if !attempt.Final() {
+		retryAt := now.Add(blockedRetryDelay(attempt.Number))
+		slog.WarnContext(ctx, "provider denied access; scheduling a longer-range retry",
+			"media_id", mediaID, "title", media.Metadata.Title,
+			"attempt", attempt.Number, "of", attempt.Budget,
+			"retry_after", retryAt, "reason", cause.Error())
+		return jobs.RetryAfter(retryAt, cause)
 	}
 	s.deps.Events.Publish(events.Event{
 		Kind:    events.KindMediaFailed,
@@ -1085,7 +1115,7 @@ func (s *Service) markBlocked(ctx context.Context, mediaID int64, media domain.M
 		Title:   media.Metadata.Title,
 		Message: cause.Error(),
 	})
-	slog.ErrorContext(ctx, "provider denied access to a download; failing it now instead of retrying",
+	slog.ErrorContext(ctx, "provider denied access to a download; retries exhausted",
 		"media_id", mediaID, "title", media.Metadata.Title, "reason", cause.Error())
 	if err := s.deps.Notifier.Notify(ctx, blockedNotificationTitle, media.Metadata.Title); err != nil {
 		log.Printf("library: notify blocked download %q: %v", media.Metadata.Title, err)

@@ -553,7 +553,7 @@ func TestDownloadMediaSkippedByDateCutoffMarksSkipped(t *testing.T) {
 	// yt-dlp declined to download it (before the cutoff) — a settled skip.
 	h.runner.downloadErr = ytdlp.ErrFilteredOut
 
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia should not error on a date skip, got %v", err)
 	}
 
@@ -589,7 +589,7 @@ func TestDownloadMediaAppliesCustomOptionsAndHook(t *testing.T) {
 	downloadedPath := filepath.Join(h.mediaDir, "Vid.mp4")
 	h.runner.result = ytdlp.DownloadResult{FilePath: downloadedPath, FileSize: 10}
 
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 
@@ -629,7 +629,7 @@ func TestDownloadMediaFlagsADegradedDownload(t *testing.T) {
 		FilePath: filepath.Join(h.mediaDir, "Vid.mp4"), FileSize: 10, Height: 360,
 	}
 
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 
@@ -668,7 +668,7 @@ func TestDownloadMediaAtFullQualityCarriesNoNoteAndClearsAnOldOne(t *testing.T) 
 		FilePath: filepath.Join(h.mediaDir, "Vid.mkv"), FileSize: 10, Height: 1080,
 	}
 
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 
@@ -1422,7 +1422,7 @@ func TestDownloadMediaSuccess(t *testing.T) {
 	downloadedPath := filepath.Join(h.mediaDir, "My Channel", "Cool Video.mp4")
 	h.runner.result = ytdlp.DownloadResult{FilePath: downloadedPath, FileSize: 4242}
 
-	if err := h.svc.DownloadMedia(context.Background(), mediaID); err != nil {
+	if err := h.svc.DownloadMedia(context.Background(), mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 
@@ -1487,7 +1487,7 @@ func TestDownloadMediaFailure(t *testing.T) {
 	})
 	h.runner.downloadErr = errors.New("network down")
 
-	err := h.svc.DownloadMedia(context.Background(), mediaID)
+	err := h.svc.DownloadMedia(context.Background(), mediaID, firstAttempt)
 	if err == nil {
 		t.Fatalf("expected error from failed download")
 	}
@@ -1523,7 +1523,7 @@ func TestDownloadMediaBacksOffWhenThrottled(t *testing.T) {
 	})
 	h.runner.downloadErr = fmt.Errorf("%w: HTTP Error 429", ytdlp.ErrThrottled)
 
-	err := h.svc.DownloadMedia(context.Background(), mediaID)
+	err := h.svc.DownloadMedia(context.Background(), mediaID, firstAttempt)
 
 	// A throttled download defers rather than fails: the retry budget is not
 	// spent proving the provider right.
@@ -1695,7 +1695,7 @@ func TestDownloadMediaDefersWhenItIsNotItsTurn(t *testing.T) {
 		Metadata:   domain.MediaMetadata{Title: "Cool Video", UploadDate: h.now},
 	})
 
-	err := h.svc.DownloadMedia(context.Background(), mediaID)
+	err := h.svc.DownloadMedia(context.Background(), mediaID, firstAttempt)
 
 	var deferral *jobs.Deferral
 	if !errors.As(err, &deferral) {
@@ -1732,7 +1732,7 @@ func TestDownloadMediaProceedsWhenItIsItsTurn(t *testing.T) {
 		FilePath: filepath.Join(h.mediaDir, "My Channel", "Cool Video.mp4"), FileSize: 1,
 	}
 
-	if err := h.svc.DownloadMedia(context.Background(), mediaID); err != nil {
+	if err := h.svc.DownloadMedia(context.Background(), mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 	if h.runner.downloadCalls != 1 {
@@ -1764,7 +1764,7 @@ func TestPacingDoesNotApplyToItemsBeingDiscarded(t *testing.T) {
 		Metadata:   domain.MediaMetadata{Title: "Ancient", UploadDate: h.now.AddDate(-1, 0, 0)},
 	})
 
-	if err := h.svc.DownloadMedia(context.Background(), mediaID); err != nil {
+	if err := h.svc.DownloadMedia(context.Background(), mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 	got, _ := h.media.Get(context.Background(), mediaID)

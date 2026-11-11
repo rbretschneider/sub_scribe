@@ -21,16 +21,18 @@ func (f *fakeIndexer) IndexSource(_ context.Context, sourceID int64) error {
 	return f.err
 }
 
-// fakeDownloader records the media id it was asked to download.
+// fakeDownloader records the media id and attempt it was asked to download.
 type fakeDownloader struct {
 	called  bool
 	mediaID int64
+	attempt jobs.Attempt
 	err     error
 }
 
-func (f *fakeDownloader) DownloadMedia(_ context.Context, mediaID int64) error {
+func (f *fakeDownloader) DownloadMedia(_ context.Context, mediaID int64, attempt jobs.Attempt) error {
 	f.called = true
 	f.mediaID = mediaID
+	f.attempt = attempt
 	return f.err
 }
 
@@ -146,7 +148,7 @@ func TestDownloadHandler(t *testing.T) {
 	}{
 		{
 			name:       "delegates with media id",
-			task:       jobs.Task{ID: 1, MediaID: id(99)},
+			task:       jobs.Task{ID: 1, MediaID: id(99), Attempts: 2, MaxAttempts: 3},
 			wantCalled: true,
 			wantID:     99,
 		},
@@ -177,6 +179,9 @@ func TestDownloadHandler(t *testing.T) {
 			}
 			if tt.wantCalled && fake.mediaID != tt.wantID {
 				t.Fatalf("mediaID = %d, want %d", fake.mediaID, tt.wantID)
+			}
+			if tt.wantCalled && fake.attempt != tt.task.Attempt() {
+				t.Fatalf("attempt = %+v, want the task's own %+v", fake.attempt, tt.task.Attempt())
 			}
 			if tt.fakeErr != nil && !errors.Is(err, tt.fakeErr) {
 				t.Fatalf("err = %v, want wrap of %v", err, tt.fakeErr)

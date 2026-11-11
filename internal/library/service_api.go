@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"sub_scribe/internal/domain"
+	"sub_scribe/internal/jobs"
 )
 
 // The service exposes several small, client-focused interfaces rather than one
@@ -68,9 +69,11 @@ type Indexer interface {
 }
 
 // Downloader fetches one pending media item and records the result. Invoked by
-// the download task handler.
+// the download task handler, which passes which try of the task's retry budget
+// this is, so the service can schedule its own longer-range retries for
+// failures the standard backoff cannot outwait.
 type Downloader interface {
-	DownloadMedia(ctx context.Context, mediaID int64) error
+	DownloadMedia(ctx context.Context, mediaID int64, attempt jobs.Attempt) error
 }
 
 // Retainer enforces a source's retention policy by deleting downloaded media

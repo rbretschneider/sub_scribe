@@ -127,7 +127,7 @@ func TestDownloadFetchesTheUploadDateWhenIndexingLeftItBlank(t *testing.T) {
 	h.runner.metadata = ytdlp.IndexEntry{ExternalID: "vid1", Title: "A Video", UploadDate: uploaded}
 	h.runner.result = ytdlp.DownloadResult{FilePath: h.mediaDir + "/out.mkv", FileSize: 10}
 
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 
@@ -157,7 +157,7 @@ func TestDownloadSkipsTheMetadataLookupWhenTheDateIsKnown(t *testing.T) {
 	})
 	h.runner.result = ytdlp.DownloadResult{FilePath: h.mediaDir + "/out.mkv", FileSize: 10}
 
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestUnavailableMediaIsSettledNotRetried(t *testing.T) {
 	h.runner.downloadErr = ytdlp.ErrUnavailable
 
 	// No error: the task must not spend its retry budget on a settled answer.
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia returned %v, want nil so the task is not retried", err)
 	}
 
@@ -226,7 +226,7 @@ func TestUnavailableIsSettledWhereverItIsDiscovered(t *testing.T) {
 			})
 			test.apply(h.runner)
 
-			if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+			if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 				t.Fatalf("DownloadMedia returned %v, want nil so the task is not retried", err)
 			}
 
@@ -256,7 +256,7 @@ func TestDownloadKeepsScratchFilesOffTheMediaVolume(t *testing.T) {
 	})
 	h.runner.result = ytdlp.DownloadResult{FilePath: h.mediaDir + "/out.mkv", FileSize: 1}
 
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 
@@ -359,7 +359,7 @@ func TestSkippedVideosLeaveNoEmptyFoldersBehind(t *testing.T) {
 	})
 	h.runner.downloadErr = ytdlp.ErrFilteredOut
 
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 
@@ -448,7 +448,7 @@ func TestOutOfWindowVideosAreSkippedWithoutDownloading(t *testing.T) {
 		UploadDate: h.now.AddDate(-12, 0, 0),
 	}
 
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 
@@ -481,7 +481,7 @@ func TestInWindowVideosStillDownload(t *testing.T) {
 	})
 	h.runner.result = ytdlp.DownloadResult{FilePath: h.mediaDir + "/out.mkv", FileSize: 5}
 
-	if err := h.svc.DownloadMedia(ctx, mediaID); err != nil {
+	if err := h.svc.DownloadMedia(ctx, mediaID, firstAttempt); err != nil {
 		t.Fatalf("DownloadMedia: %v", err)
 	}
 
