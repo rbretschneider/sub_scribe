@@ -36,8 +36,12 @@ FROM alpine:3.22
 # docker-compose.yml) — a mismatch makes yt-dlp warn on every invocation and,
 # at worst, breaks PO tokens entirely, which YouTube answers by serving only
 # the 360p progressive format. Bump this pin when the server image updates.
+# The curl-cffi extra gives yt-dlp impersonation targets (TLS fingerprints of
+# real browsers) — its second way past 403s when a player client is blocked.
+# Without it every run warned "no impersonate target is available"; curl_cffi
+# ships musllinux wheels, so this costs no build toolchain on Alpine.
 RUN apk add --no-cache ca-certificates ffmpeg nodejs python3 py3-pip \
-    && pip install --no-cache-dir --break-system-packages yt-dlp apprise bgutil-ytdlp-pot-provider==2.0.2 \
+    && pip install --no-cache-dir --break-system-packages "yt-dlp[default,curl-cffi]" apprise bgutil-ytdlp-pot-provider==2.0.2 \
     && printf -- '--js-runtimes node\n--remote-components ejs:github\n' > /etc/yt-dlp.conf \
     && rm -rf /root/.cache
 

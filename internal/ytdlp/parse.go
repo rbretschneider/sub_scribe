@@ -125,6 +125,13 @@ const (
 	// through. Update defaultPlayerClient if YouTube deprecates it.
 	playerClientArgPrefix = "youtube:player_client="
 	defaultPlayerClient   = "tv_simply"
+	// fallbackPlayerClient is deliberately empty: it hands client selection
+	// back to yt-dlp itself. YouTube blocks individual player clients from
+	// time to time (a 403 on the video data under tv_simply while the default
+	// selection works, first seen on BBC Bluey uploads), so a download refused
+	// with a 403 gets one more try without the pin. Scans keep the pin
+	// unconditionally — tv_simply is what sails through bot checks there.
+	fallbackPlayerClient = ""
 )
 
 // indexLine is the subset of yt-dlp --dump-json fields this package consumes.
@@ -214,7 +221,7 @@ func buildIndexArgs(url string, opts IndexOptions, potProviderURL string, thrott
 	args = appendCookies(args, opts.CookiesPath)
 	args = appendPOTProvider(args, potProviderURL)
 	args = throttle.appendRequestFlags(args)
-	args = appendPlayerClient(args)
+	args = appendPlayerClient(args, defaultPlayerClient)
 	return append(args, url)
 }
 
@@ -226,12 +233,21 @@ func buildMetadataArgs(url, cookiesPath, potProviderURL string, throttle Throttl
 	args = appendCookies(args, cookiesPath)
 	args = appendPOTProvider(args, potProviderURL)
 	args = throttle.appendRequestFlags(args)
-	args = appendPlayerClient(args)
+	args = appendPlayerClient(args, defaultPlayerClient)
 	return append(args, url)
 }
 
-// buildDownloadArgs builds the yt-dlp argument list for downloading one item.
+// buildDownloadArgs builds the yt-dlp argument list for downloading one item,
+// resolving the video through the pinned player client.
 func buildDownloadArgs(url string, opts DownloadOptions, potProviderURL string, throttle Throttle) []string {
+	return buildDownloadArgsForClient(url, opts, potProviderURL, throttle, defaultPlayerClient)
+}
+
+// buildDownloadArgsForClient is buildDownloadArgs with the player client as a
+// parameter, so the 403 fallback can rebuild the identical invocation with the
+// pin removed. client may be fallbackPlayerClient (empty) to leave selection
+// to yt-dlp.
+func buildDownloadArgsForClient(url string, opts DownloadOptions, potProviderURL string, throttle Throttle, client string) []string {
 	args := []string{flagOutput, opts.OutputPath + outputExtTemplate}
 	args = appendPaths(args, opts)
 	args = appendFormat(args, opts)
@@ -248,7 +264,7 @@ func buildDownloadArgs(url string, opts DownloadOptions, potProviderURL string, 
 	args = throttle.appendDownloadFlags(args)
 	args = append(args, opts.ExtraArgs...)
 	args = appendProgressFlags(args)
-	args = appendPlayerClient(args)
+	args = appendPlayerClient(args, client)
 	return append(args, url)
 }
 
@@ -262,10 +278,14 @@ func appendPOTProvider(args []string, potProviderURL string) []string {
 	return append(args, flagExtractorArgs, potProviderArgPrefix+potProviderURL)
 }
 
-// appendPlayerClient pins the YouTube player client for downloads. See
-// defaultPlayerClient for why this is required.
-func appendPlayerClient(args []string) []string {
-	return append(args, flagExtractorArgs, playerClientArgPrefix+defaultPlayerClient)
+// appendPlayerClient pins the YouTube player client, or leaves yt-dlp's own
+// selection untouched when client is empty. See defaultPlayerClient for why
+// the pin exists and fallbackPlayerClient for why it is sometimes dropped.
+func appendPlayerClient(args []string, client string) []string {
+	if client == "" {
+		return args
+	}
+	return append(args, flagExtractorArgs, playerClientArgPrefix+client)
 }
 
 // appendPaths splits the destination from the scratch space: the finished file

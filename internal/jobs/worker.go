@@ -121,11 +121,13 @@ func (p *Pool) ProcessOnce(ctx context.Context) (bool, error) {
 
 // dispatch runs a task's handler and records the outcome on the queue. The
 // handler runs under a context tagged with the task id so its log output is
-// attributable, and the start and finish of every task are logged so a job's
-// detail view reads as a complete story even when the handler itself is quiet.
+// attributable. Claiming is logged at debug — most claims of a paced download
+// are immediately deferred again, and a start line per claim drowned the log —
+// while the outcome line carries the attempt counts, so each run still reads
+// as a complete story at the default level.
 func (p *Pool) dispatch(ctx context.Context, task Task) {
 	taskCtx := p.tagContext(ctx, task.ID)
-	p.log.InfoContext(taskCtx, "task started",
+	p.log.DebugContext(taskCtx, "task started",
 		"task_id", task.ID, "type", task.Type, "attempt", task.Attempts, "of", task.MaxAttempts)
 
 	err := p.runHandler(taskCtx, task)
@@ -134,7 +136,7 @@ func (p *Pool) dispatch(ctx context.Context, task Task) {
 	// and simply becomes eligible later.
 	var deferral *Deferral
 	if errors.As(err, &deferral) {
-		p.log.InfoContext(taskCtx, "task deferred",
+		p.log.Log(taskCtx, deferralLevel(deferral), "task deferred",
 			"task_id", task.ID, "type", task.Type,
 			"run_after", deferral.RunAfter, "reason", deferral.Reason)
 		if deferErr := p.queue.Defer(ctx, task.ID, deferral.RunAfter, now, deferral.Reason); deferErr != nil {
@@ -143,16 +145,27 @@ func (p *Pool) dispatch(ctx context.Context, task Task) {
 		return
 	}
 	if err != nil {
-		p.log.ErrorContext(taskCtx, "task failed", "task_id", task.ID, "type", task.Type, "error", err)
+		p.log.ErrorContext(taskCtx, "task failed", "task_id", task.ID, "type", task.Type,
+			"attempt", task.Attempts, "of", task.MaxAttempts, "error", err)
 		if failErr := p.queue.Fail(ctx, task, err.Error(), now); failErr != nil {
 			p.log.ErrorContext(taskCtx, "recording task failure failed", "task_id", task.ID, "error", failErr)
 		}
 		return
 	}
-	p.log.InfoContext(taskCtx, "task finished", "task_id", task.ID, "type", task.Type)
+	p.log.InfoContext(taskCtx, "task finished", "task_id", task.ID, "type", task.Type,
+		"attempt", task.Attempts, "of", task.MaxAttempts)
 	if completeErr := p.queue.Complete(ctx, task.ID, now); completeErr != nil {
 		p.log.ErrorContext(taskCtx, "recording task success failed", "task_id", task.ID, "error", completeErr)
 	}
+}
+
+// deferralLevel grades a deferral for the log: routine scheduling waits are
+// debug-level chatter, anything else is worth seeing.
+func deferralLevel(deferral *Deferral) slog.Level {
+	if deferral.Routine {
+		return slog.LevelDebug
+	}
+	return slog.LevelInfo
 }
 
 // runHandler resolves and invokes the handler for a task, converting a panic into
