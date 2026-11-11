@@ -186,6 +186,75 @@ func TestFailRequeuesWithBackoffWhenRetriesRemain(t *testing.T) {
 	}
 }
 
+// TestFailAtRequeuesAtTheChosenTime pins that a failure which picks its own
+// comeback time (a 403 block waiting out the provider) is honored: not
+// runnable before that time, runnable after, with the attempt spent.
+func TestFailAtRequeuesAtTheChosenTime(t *testing.T) {
+	repo := newTestDB(t).Tasks()
+	ctx := context.Background()
+
+	if _, err := repo.Enqueue(ctx, jobs.NewTask(jobs.TaskDownloadMedia, now)); err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+	claimed, err := repo.Claim(ctx, now)
+	if err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+	comeback := now.Add(6 * time.Hour)
+	if err := repo.FailAt(ctx, *claimed, "HTTP Error 403", comeback, now); err != nil {
+		t.Fatalf("FailAt() error = %v", err)
+	}
+
+	// The standard backoff window (minutes) must not make it runnable early.
+	if early, _ := repo.Claim(ctx, now.Add(time.Hour)); early != nil {
+		t.Error("task was claimable before its chosen retry time")
+	}
+	requeued, err := repo.Claim(ctx, comeback.Add(time.Second))
+	if err != nil {
+		t.Fatalf("Claim(after comeback) error = %v", err)
+	}
+	if requeued == nil {
+		t.Fatal("expected task to be claimable once its chosen time passed")
+	}
+	if requeued.Attempts != 2 {
+		t.Errorf("Attempts = %d, want 2 — the scheduled retry must spend an attempt", requeued.Attempts)
+	}
+	if requeued.LastError != "HTTP Error 403" {
+		t.Errorf("LastError = %q, want the cause recorded", requeued.LastError)
+	}
+}
+
+// TestFailAtOutOfBudgetMarksFailed pins the bound: with no retries left, a
+// scheduled retry degrades to a terminal failure exactly as Fail does.
+func TestFailAtOutOfBudgetMarksFailed(t *testing.T) {
+	repo := newTestDB(t).Tasks()
+	ctx := context.Background()
+
+	task := jobs.NewTask(jobs.TaskDownloadMedia, now)
+	task.MaxAttempts = 1
+	if _, err := repo.Enqueue(ctx, task); err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+	claimed, err := repo.Claim(ctx, now)
+	if err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+	if err := repo.FailAt(ctx, *claimed, "HTTP Error 403", now.Add(time.Hour), now); err != nil {
+		t.Fatalf("FailAt() error = %v", err)
+	}
+
+	if again, _ := repo.Claim(ctx, now.Add(48*time.Hour)); again != nil {
+		t.Error("an out-of-budget task must be terminally failed, not requeued")
+	}
+	count, err := repo.PendingCount(ctx)
+	if err != nil {
+		t.Fatalf("PendingCount() error = %v", err)
+	}
+	if count != 0 {
+		t.Errorf("PendingCount() = %d, want 0", count)
+	}
+}
+
 func TestRetryAllFailedRequeuesFailedTasks(t *testing.T) {
 	db := newTestDB(t)
 	repo := db.Tasks()

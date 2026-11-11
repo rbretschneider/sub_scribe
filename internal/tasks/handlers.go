@@ -47,7 +47,7 @@ func DownloadHandler(downloader library.Downloader) jobs.HandlerFunc {
 		if task.MediaID == nil {
 			return fmt.Errorf("download task %d: missing media id", task.ID)
 		}
-		return downloader.DownloadMedia(ctx, *task.MediaID)
+		return downloader.DownloadMedia(ctx, *task.MediaID, task.Attempt())
 	}
 }
 

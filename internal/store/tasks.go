@@ -122,13 +122,29 @@ func (r *TaskRepo) Complete(ctx context.Context, id int64, now time.Time) error 
 // count drives the decision.
 func (r *TaskRepo) Fail(ctx context.Context, task jobs.Task, cause string, now time.Time) error {
 	if task.CanRetry() {
-		return r.requeue(ctx, task, cause, now)
+		return r.requeueAt(ctx, task.ID, cause, task.NextRunAfter(now).Unix(), now)
 	}
+	return r.markFailed(ctx, task.ID, cause, now)
+}
+
+// FailAt is Fail with the caller choosing the next eligibility time, for
+// failures whose cause takes hours to pass — the standard backoff would only
+// collect the same refusal a few minutes apart. Out of budget it marks the
+// task failed exactly as Fail does.
+func (r *TaskRepo) FailAt(ctx context.Context, task jobs.Task, cause string, runAfter, now time.Time) error {
+	if task.CanRetry() {
+		return r.requeueAt(ctx, task.ID, cause, unixCeil(runAfter), now)
+	}
+	return r.markFailed(ctx, task.ID, cause, now)
+}
+
+// markFailed puts a task in its terminal failed state with the cause recorded.
+func (r *TaskRepo) markFailed(ctx context.Context, id int64, cause string, now time.Time) error {
 	if _, err := r.sql.ExecContext(ctx,
 		`UPDATE tasks SET status = ?, last_error = ?, updated_at = ? WHERE id = ?`,
-		jobs.StatusFailed, cause, now.Unix(), task.ID,
+		jobs.StatusFailed, cause, now.Unix(), id,
 	); err != nil {
-		return fmt.Errorf("store: fail task %d: %w", task.ID, err)
+		return fmt.Errorf("store: fail task %d: %w", id, err)
 	}
 	return nil
 }
@@ -165,14 +181,14 @@ func unixCeil(t time.Time) int64 {
 	return sec
 }
 
-// requeue reschedules a retryable task for a later attempt with backoff.
-func (r *TaskRepo) requeue(ctx context.Context, task jobs.Task, cause string, now time.Time) error {
-	runAfter := task.NextRunAfter(now)
+// requeueAt reschedules a retryable task for a later attempt at the given
+// eligibility time (unix seconds).
+func (r *TaskRepo) requeueAt(ctx context.Context, id int64, cause string, runAfterUnix int64, now time.Time) error {
 	if _, err := r.sql.ExecContext(ctx,
 		`UPDATE tasks SET status = ?, last_error = ?, run_after = ?, updated_at = ? WHERE id = ?`,
-		jobs.StatusPending, cause, runAfter.Unix(), now.Unix(), task.ID,
+		jobs.StatusPending, cause, runAfterUnix, now.Unix(), id,
 	); err != nil {
-		return fmt.Errorf("store: requeue task %d: %w", task.ID, err)
+		return fmt.Errorf("store: requeue task %d: %w", id, err)
 	}
 	return nil
 }

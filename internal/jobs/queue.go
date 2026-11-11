@@ -16,6 +16,10 @@ type Queue interface {
 	Complete(ctx context.Context, id int64, now time.Time) error
 	// Fail records a failed attempt, requeuing with backoff or marking failed.
 	Fail(ctx context.Context, task Task, cause string, now time.Time) error
+	// FailAt records a failed attempt like Fail, but with the caller choosing
+	// when the next attempt becomes eligible instead of the standard backoff —
+	// for failures whose cause takes hours to pass. See Retry.
+	FailAt(ctx context.Context, task Task, cause string, runAfter, now time.Time) error
 	// Defer returns a claimed task to the queue to run no earlier than runAfter,
 	// without recording an attempt. It is how a handler declines its turn — see
 	// Deferral — so waiting costs a queue row rather than a worker.

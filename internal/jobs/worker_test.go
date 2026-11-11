@@ -27,6 +27,10 @@ type fakeQueue struct {
 	failedCause string
 	wasFailed   bool
 
+	failedAtCause    string
+	failedAtRunAfter time.Time
+	wasFailedAt      bool
+
 	deferredID       int64
 	deferredRunAfter time.Time
 	deferredReason   string
@@ -51,6 +55,13 @@ func (q *fakeQueue) Complete(_ context.Context, id int64, _ time.Time) error {
 func (q *fakeQueue) Fail(_ context.Context, _ Task, cause string, _ time.Time) error {
 	q.failedCause = cause
 	q.wasFailed = true
+	return nil
+}
+
+func (q *fakeQueue) FailAt(_ context.Context, _ Task, cause string, runAfter, _ time.Time) error {
+	q.failedAtCause = cause
+	q.failedAtRunAfter = runAfter
+	q.wasFailedAt = true
 	return nil
 }
 
@@ -192,6 +203,56 @@ func TestDeferredTaskIsRescheduledNotFailed(t *testing.T) {
 	}
 	if queue.deferredReason != "waiting its turn" {
 		t.Errorf("deferred reason = %q, want the handler's reason", queue.deferredReason)
+	}
+}
+
+// TestScheduledRetryFailsAtItsChosenTime pins the third outcome a handler can
+// report: a genuine failure that picks its own comeback time. It must spend
+// the attempt (FailAt, not Defer) — that budget is the only thing bounding a
+// failure whose cause may never pass — while honoring the chosen eligibility
+// time instead of the standard backoff.
+func TestScheduledRetryFailsAtItsChosenTime(t *testing.T) {
+	runAfter := time.Date(2026, 7, 27, 18, 0, 0, 0, time.UTC)
+	queue := &fakeQueue{pending: indexTask()}
+	pool := newPoolWith(queue, HandlerFunc(func(context.Context, Task) error {
+		return RetryAfter(runAfter, errors.New("HTTP Error 403"))
+	}))
+
+	if _, err := pool.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("ProcessOnce() error = %v", err)
+	}
+
+	if !queue.wasFailedAt {
+		t.Fatal("scheduled retry was not recorded via FailAt")
+	}
+	if queue.wasDeferred {
+		t.Error("a scheduled retry must not be a deferral, or it would never spend its budget")
+	}
+	if queue.wasFailed || queue.wasCompleted {
+		t.Error("a scheduled retry must be recorded only via FailAt")
+	}
+	if !queue.failedAtRunAfter.Equal(runAfter) {
+		t.Errorf("failedAt run_after = %v, want %v", queue.failedAtRunAfter, runAfter)
+	}
+	if queue.failedAtCause != "HTTP Error 403" {
+		t.Errorf("failedAt cause = %q, want the underlying cause without the scheduling wrapper", queue.failedAtCause)
+	}
+}
+
+// TestScheduledRetrySurvivesWrapping checks a wrapped Retry is still honored,
+// since handlers routinely add context to what they return.
+func TestScheduledRetrySurvivesWrapping(t *testing.T) {
+	runAfter := time.Date(2026, 7, 27, 19, 0, 0, 0, time.UTC)
+	queue := &fakeQueue{pending: indexTask()}
+	pool := newPoolWith(queue, HandlerFunc(func(context.Context, Task) error {
+		return fmt.Errorf("download media 7: %w", RetryAfter(runAfter, errors.New("blocked")))
+	}))
+
+	if _, err := pool.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("ProcessOnce() error = %v", err)
+	}
+	if !queue.wasFailedAt || queue.wasFailed {
+		t.Error("a wrapped scheduled retry was treated as a plain failure")
 	}
 }
 

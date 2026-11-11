@@ -144,6 +144,19 @@ func (p *Pool) dispatch(ctx context.Context, task Task) {
 		}
 		return
 	}
+	// A scheduled retry is a real failure that knows its cause takes a while to
+	// pass: it spends the attempt like any failure but picks its own comeback
+	// time instead of the standard seconds-to-minutes backoff.
+	var retry *Retry
+	if errors.As(err, &retry) {
+		p.log.ErrorContext(taskCtx, "task failed", "task_id", task.ID, "type", task.Type,
+			"attempt", task.Attempts, "of", task.MaxAttempts,
+			"retry_after", retry.RunAfter, "error", retry.Cause)
+		if failErr := p.queue.FailAt(ctx, task, retry.Cause.Error(), retry.RunAfter, now); failErr != nil {
+			p.log.ErrorContext(taskCtx, "recording task failure failed", "task_id", task.ID, "error", failErr)
+		}
+		return
+	}
 	if err != nil {
 		p.log.ErrorContext(taskCtx, "task failed", "task_id", task.ID, "type", task.Type,
 			"attempt", task.Attempts, "of", task.MaxAttempts, "error", err)

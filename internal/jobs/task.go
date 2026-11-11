@@ -101,6 +101,28 @@ func (t Task) CanRetry() bool {
 	return t.Attempts < t.MaxAttempts
 }
 
+// Attempt describes which try of its retry budget a task is on, so a handler
+// can choose between scheduling another try and giving up for good without
+// knowing anything else about the queue. The zero value reads as final: a
+// caller that does not know the budget gets fail-now behavior, never an
+// unbounded retry loop.
+type Attempt struct {
+	// Number is the 1-based try currently executing.
+	Number int
+	// Budget is the task's MaxAttempts.
+	Budget int
+}
+
+// Final reports whether no further attempt will follow this one.
+func (a Attempt) Final() bool {
+	return a.Number >= a.Budget
+}
+
+// Attempt returns which try of its budget this claimed task is on.
+func (t Task) Attempt() Attempt {
+	return Attempt{Number: t.Attempts, Budget: t.MaxAttempts}
+}
+
 // NextRunAfter returns when a retryable task should next become eligible, applying
 // exponential backoff based on how many attempts have already been made.
 func (t Task) NextRunAfter(now time.Time) time.Time {
